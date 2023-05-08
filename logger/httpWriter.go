@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// HttpWriter is an interface that defines an io.Writer that writes to an HTTP endpoint.
 type HttpWriter interface {
 	io.Writer
 	IsReady() bool
@@ -20,6 +21,7 @@ type httpWriter struct {
 	buffer   *bytes.Buffer
 }
 
+// IsReady returns true if the HTTP writer is ready to write.
 func (rw *httpWriter) IsReady() bool {
 	return rw.buffer != nil && rw.client != nil
 }
@@ -66,7 +68,6 @@ func (rw *httpWriter) Write(p []byte) (n int, err error) {
 		}
 	}(resp.Body)
 
-	// Check the response status.
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("failed to write to the RESTful endpoint %s; status code: %s", rw.endpoint, resp.Status)
 	}

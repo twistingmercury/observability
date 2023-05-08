@@ -61,7 +61,7 @@ func TestTracing(t *testing.T) {
 		attribute.Int("test_int", 1),
 	}
 
-	cCtx, span := tracing.New(ctx, "test_span", attribs...)
+	cCtx, span := tracing.New(ctx, "test_span", trace.SpanKindUnspecified, attribs...)
 	defer tracing.EndOK(span)
 	assert.NotNil(t, cCtx)
 	assert.NotNil(t, span)
@@ -69,7 +69,7 @@ func TestTracing(t *testing.T) {
 	assert.NotEqual(t, emptySpanId, span.SpanContext().SpanID().String())
 	defer tracing.EndOK(span)
 
-	dCtx, span := tracing.New(nil, "test_span")
+	dCtx, span := tracing.New(nil, "test_span", trace.SpanKindUnspecified)
 	defer tracing.EndOK(span)
 	assert.NotNil(t, dCtx)
 	assert.NotNil(t, span)

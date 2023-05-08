@@ -1,1 +1,278 @@
 package middleware_test
+
+import (
+	"context"
+	"github.com/twistingmercury/observability/logger"
+	"github.com/twistingmercury/observability/metrics"
+	tracing "github.com/twistingmercury/observability/tracer"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/bufconn"
+	"log"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
+	"github.com/twistingmercury/observability/middleware"
+)
+
+const bufSize = 1024 * 1024
+
+var (
+	lis *bufconn.Listener
+	svr *grpc.Server
+)
+
+func setupTestSvr() {
+	lis = bufconn.Listen(bufSize)
+	svr = grpc.NewServer()
+	go func() {
+		if err := svr.Serve(lis); err != nil {
+			log.Fatalf("Server exited with error: %v", err)
+		}
+	}()
+}
+
+func bufDialer(context.Context, string) (net.Conn, error) {
+	return lis.Dial()
+}
+
+func TestInitialize(t *testing.T) {
+	setupTestSvr()
+	defer svr.Stop()
+
+	ctx := context.Background()
+	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	assert.NoError(t, err)
+
+	shutdown, err := metrics.Initialize("unit.test", conn)
+	assert.NoError(t, err)
+	_ = shutdown(context.TODO())
+
+	_, err = metrics.Initialize("unit-tests", conn)
+	assert.NoError(t, err, "failed to initialize metrics")
+	err = middleware.Initialize()
+	assert.NoError(t, err, "failed to initialize middleware")
+}
+
+type testCase struct {
+	rawUserAgent string
+	expected     []logger.Attribute
+}
+
+var testCases = []testCase{
+	{
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
+		[]logger.Attribute{
+			{"http.user_agent.browser", "chrome"},
+			{"http.user_agent.browser_version", "58.0.3029.110"},
+			{"http.user_agent.os", "Windows"},
+			{"http.user_agent.os_Version", "10.0"},
+			{"http.user_agent.device", "unknown"},
+			{"http.user_agent.type", "desktop"},
+			{"http.user_agent.URL", "unknown"},
+		},
+	},
+	{
+		"Mozilla/5.0 (Macintosh; Intel macOS 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Safari/605.1.15",
+		[]logger.Attribute{
+			{"http.user_agent.browser", "safari"},
+			{"http.user_agent.browser_version", "14.1.2"},
+			{"http.user_agent.os", "macOS"},
+			{"http.user_agent.os_Version", "10.15.7"},
+			{"http.user_agent.device", "unknown"},
+			{"http.user_agent.type", "desktop"},
+			{"http.user_agent.URL", "unknown"},
+		},
+	},
+	{
+		"Mozilla/5.0 (Linux; Android 10; SM-A505F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.105 Mobile Safari/537.36",
+		[]logger.Attribute{
+			{"http.user_agent.browser", "chrome"},
+			{"http.user_agent.browser_version", "89.0.4389.105"},
+			{"http.user_agent.os", "Android"},
+			{"http.user_agent.os_Version", "10"},
+			{"http.user_agent.device", "SM-A505F"},
+			{"http.user_agent.type", "mobile"},
+			{"http.user_agent.URL", "unknown"},
+		},
+	},
+	{
+		"Mozilla/5.0 (iPhone; CPU iPhone OS 14_4_2 like macOS) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1",
+		[]logger.Attribute{
+			{"http.user_agent.browser", "safari"},
+			{"http.user_agent.browser_version", "14.0.3"},
+			{"http.user_agent.os", "iOS"},
+			{"http.user_agent.os_Version", "14.4.2"},
+			{"http.user_agent.device", "iPhone"},
+			{"http.user_agent.type", "mobile"},
+			{"http.user_agent.URL", "unknown"},
+		},
+	},
+	{
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134",
+		[]logger.Attribute{
+			{"http.user_agent.browser", "edge"},
+			{"http.user_agent.browser_version", "17.17134"},
+			{"http.user_agent.os", "Windows"},
+			{"http.user_agent.os_Version", "10.0"},
+			{"http.user_agent.device", "unknown"},
+			{"http.user_agent.type", "desktop"},
+			{"http.user_agent.URL", "unknown"},
+		},
+	},
+	{
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
+		[]logger.Attribute{
+			{"http.user_agent.browser", "firefox"},
+			{"http.user_agent.browser_version", "89.0"},
+			{"http.user_agent.os", "Windows"},
+			{"http.user_agent.os_Version", "10.0"},
+			{"http.user_agent.device", "unknown"},
+			{"http.user_agent.type", "desktop"},
+			{"http.user_agent.URL", "unknown"},
+		},
+	},
+	{
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 OPR/52.0.2871.99",
+		[]logger.Attribute{
+			{"http.user_agent.browser", "opera"},
+			{"http.user_agent.browser_version", "52.0.2871.99"},
+			{"http.user_agent.os", "Windows"},
+			{"http.user_agent.os_Version", "10.0"},
+			{"http.user_agent.device", "unknown"},
+			{"http.user_agent.type", "desktop"},
+			{"http.user_agent.URL", "unknown"},
+		},
+	},
+	{
+		"Mozilla/5.0 (Windows NT 10.0; Trident/7.0; AS; rv:11.0) like Gecko",
+		[]logger.Attribute{
+			{"http.user_agent.browser", "internet_explorer"},
+			{"http.user_agent.browser_version", "7.0"},
+			{"http.user_agent.os", "Windows"},
+			{"http.user_agent.os_Version", "10.0"},
+			{"http.user_agent.device", "unknown"},
+			{"http.user_agent.type", "desktop"},
+			{"http.user_agent.URL", "unknown"},
+		},
+	},
+	{
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) CustomBrowser",
+		[]logger.Attribute{
+			{"http.user_agent.browser", "unknown"},
+			{"http.user_agent.browser_version", "unknown"},
+			{"http.user_agent.os", "Windows"},
+			{"http.user_agent.os_Version", "10.0"},
+			{"http.user_agent.device", "unknown"},
+			{"http.user_agent.type", "desktop"},
+			{"http.user_agent.URL", "unknown"},
+		},
+	},
+	{
+		"Mozilla/5.0 (iPad; CPU OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
+		[]logger.Attribute{
+			{"http.user_agent.browser", "safari"},
+			{"http.user_agent.browser_version", "15.0"},
+			{"http.user_agent.os", "iOS"},
+			{"http.user_agent.os_Version", "15.0"},
+			{"http.user_agent.device", "iPad"},
+			{"http.user_agent.type", "tablet"},
+			{"http.user_agent.URL", "unknown"},
+		},
+	},
+	{
+		"Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+		[]logger.Attribute{
+			{"http.user_agent.browser", "googlebot"},
+			{"http.user_agent.os", "unknown"},
+			{"http.user_agent.os_Version", "unknown"},
+			{"http.user_agent.device", "unknown"},
+			{"http.user_agent.type", "google_bot"},
+			{"http.user_agent.URL", "http://www.google.com/bot.html"},
+		},
+	},
+	{
+		"Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)",
+		[]logger.Attribute{
+			{"http.user_agent.browser", "unknown"},
+			{"http.user_agent.os", "unknown"},
+			{"http.user_agent.os_Version", "unknown"},
+			{"http.user_agent.device", "unknown"},
+			{"http.user_agent.type", "bot"},
+			{"http.user_agent.URL", "http://www.bing.com/bingbot.htm"},
+		},
+	},
+}
+
+func TestParseUserAgent(t *testing.T) {
+	for _, tc := range testCases {
+		uaMap := middleware.ParseUserAgent(tc.rawUserAgent)
+		assert.ElementsMatch(t, tc.expected, uaMap, "ParseUserAgent should return the expected map")
+	}
+
+	uaMap := middleware.ParseUserAgent(``)
+	assert.Empty(t, uaMap, "ParseUserAgent should return an empty map")
+}
+
+func TestParseHeaders(t *testing.T) {
+
+	testValue := []string{"test0", "test1", "test2"}
+	expected := strings.Join(testValue, "; ")
+	headers := map[string][]string{
+		"User-Agent":      testValue,
+		"Content-Type":    testValue,
+		"Content-Length":  testValue,
+		"X-Request-Id":    testValue,
+		"Accept-Encoding": testValue,
+		"Accept":          testValue,
+	}
+
+	hdrMap := middleware.ParseHeaders(headers)
+
+	keys := make([]string, 0, len(hdrMap))
+	for k := range hdrMap {
+		keys = append(keys, k)
+	}
+
+	for _, k := range keys {
+		k = strings.ToLower(k)
+		assert.Equal(t, expected, hdrMap[k].Value, "ParseHeaders should return the expected map")
+	}
+}
+
+func TestLogRequestMiddleware(t *testing.T) {
+	setupTestSvr()
+	defer svr.Stop()
+
+	ctx := context.Background()
+	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	assert.NoError(t, err)
+
+	_, err = metrics.Initialize("unit-tests", conn)
+	assert.NoError(t, err, "failed to initialize metrics")
+
+	_, err = tracing.Initialize(conn)
+
+	err = middleware.Initialize()
+	assert.NoError(t, err, "failed to initialize middleware")
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(middleware.LogRequest)
+	router.GET("/test", func(c *gin.Context) {
+		c.String(http.StatusOK, "OK")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3")
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code, "should return OK status")
+	assert.Equal(t, "OK", w.Body.String(), "should return OK body")
+}

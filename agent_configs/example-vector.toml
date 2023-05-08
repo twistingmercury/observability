@@ -1,0 +1,43 @@
+[api]
+enabled = true
+address = "127.0.0.1:8686"
+
+
+## ----------- sources ------------
+
+## Enables gathering logs from containers
+[sources.docker_src_logs]
+type = "docker_logs"
+include_containers = ["<your app container name from docker-compose.yml>"]
+
+## Exposes an HTTP endpoint that can receive logs via JSON over HTTP
+#[sources.http_src_logs]
+#type = "http_server"
+#address = "0.0.0.0:4319"
+
+
+## --------- transforms -----------
+
+# Ensures that the logs are properly 'json-ified' before being sent to Datadog.
+[transforms.remap_logs]
+inputs = ["docker_src_logs"]
+type = "remap"
+source = '''
+    j = parse_json!(.message)
+    . = merge!(., j)
+'''
+
+
+## ------------ sinks -------------
+## This sink will send the logs to Datadog
+[sinks.emit_logs_datadog]
+type = "datadog_logs"
+inputs = ["remap_logs"]
+default_api_key = "${DD_API_KEY}"
+compression = "gzip"
+
+## This sink will send the logs to the console
+#[sinks.emit_logs_console]
+#inputs = ["remap_logs"]
+#type = "console"
+#encoding.codec = "json"

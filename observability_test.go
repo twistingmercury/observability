@@ -33,11 +33,24 @@ func bufDialer(context.Context, string) (net.Conn, error) {
 	return lis.Dial()
 }
 
-func TestNewGrpcConnection(t *testing.T) {
-	setupTestSvr()
-	defer svr.Stop()
+func TestNewGrpcConnectionWithBlockError(t *testing.T) {
+	opts := observability.GrpcConnectionOptions{
+		TransportCreds:  insecure.NewCredentials(),
+		WaitForConnect:  true,
+		WaitTimeSeconds: 1,
+		URL:             "localhost:10101",
+	}
+	_, err := observability.NewGrpcConnection(opts)
+	assert.Error(t, err)
+}
 
-	conn, err := observability.NewGrpcConnection("bufnet", insecure.NewCredentials(), false)
+func TestNewGrpcConnectionNoBlock(t *testing.T) {
+	opts := observability.GrpcConnectionOptions{
+		TransportCreds:  insecure.NewCredentials(),
+		WaitForConnect:  false,
+		WaitTimeSeconds: 1,
+		URL:             "localhost:10101",
+	}
+	_, err := observability.NewGrpcConnection(opts)
 	assert.NoError(t, err)
-	assert.NotNil(t, conn)
 }

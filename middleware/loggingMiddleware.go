@@ -3,6 +3,8 @@ package middleware
 
 import (
 	"fmt"
+	"go.opentelemetry.io/otel/trace"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -41,7 +43,7 @@ func Initialize() error {
 
 // LogRequest logs the incoming request and starts the trace.
 func LogRequest(c *gin.Context) {
-	rCtx, span := tracer.New(c.Request.Context(), "inbound-request")
+	rCtx, span := tracer.New(c.Request.Context(), "inbound-request", trace.SpanKindServer)
 	activeReq.Add(rCtx, 1)
 	totalReq.Add(rCtx, 1)
 	s := time.Now()
@@ -60,94 +62,107 @@ func LogRequest(c *gin.Context) {
 		{Key: "http.remoteAddr", Value: c.Request.RemoteAddr},
 	}
 
-	if cType := c.Request.Header.Get("Content-Type"); len(cType) > 0 {
-		attribs = append(attribs, logger.Attribute{Key: "http.content-Type", Value: cType})
-	}
-
-	if cLen := c.Request.Header.Get("Content-Length"); len(cLen) > 0 {
-		attribs = append(attribs, logger.Attribute{Key: "http.content-Length", Value: cLen})
-	}
-
-	if aType := c.Request.Header.Get("Accept"); len(aType) > 0 {
-		attribs = append(attribs, logger.Attribute{Key: "http.accept", Value: aType})
-	}
-
-	if aEnc := c.Request.Header.Get("Accept-Encoding"); len(aEnc) > 0 {
-		attribs = append(attribs, logger.Attribute{Key: "http.accept-Encoding", Value: aEnc})
-	}
-
-	if xRid := c.Request.Header.Get("x-request-id"); len(xRid) > 0 {
-		attribs = append(attribs, logger.Attribute{Key: "http.x-request-id", Value: xRid})
-	}
-
 	if rawq := c.Request.URL.RawQuery; len(rawq) > 0 {
 		attribs = append(attribs, logger.Attribute{Key: "http.query", Value: rawq})
 	}
 
-	if uaMap := parseUserAgent(c.Request.UserAgent()); len(uaMap) > 0 {
-		for k, v := range uaMap {
-			if len(v) == 0 {
-				continue
-			}
-			attribs = append(attribs, logger.Attribute{Key: k, Value: v})
-		}
+	for _, v := range ParseHeaders(c.Request.Header) {
+		attribs = append(attribs, v)
+	}
+
+	for _, v := range ParseUserAgent(c.Request.UserAgent()) {
+		attribs = append(attribs, v)
 	}
 
 	logger.InfoWithSpanContext(c.Request.Context(), "inbound-request", attribs...)
 	c.Next()
 }
 
-func parseUserAgent(rawUserAgent string) (uaMap map[string]string) {
-	uaMap = make(map[string]string)
+// ParseHeaders parses the headers and returns a map of attributes.
+func ParseHeaders(headers map[string][]string) (headerMap map[string]logger.Attribute) {
+	keys := make([]string, 0, len(headers))
+	for k := range headers {
+		keys = append(keys, k)
+	}
+
+	headerMap = make(map[string]logger.Attribute)
+
+	for _, k := range keys {
+		lck := strings.ToLower(k)
+		la := logger.Attribute{Key: fmt.Sprintf("http.header.%s", lck),
+			Value: strings.Join(headers[k], "; ")}
+		headerMap[lck] = la
+	}
+	return
+}
+
+// ParseUserAgent parses the user agent string and returns a map of attributes.
+func ParseUserAgent(rawUserAgent string) (uaMap []logger.Attribute) {
 	if len(rawUserAgent) == 0 {
 		return //no-op
 	}
-
+	uaMap = make([]logger.Attribute, 0)
 	ua := useragent.Parse(rawUserAgent)
-	uaMap = map[string]string{
-		"http.user_agent.browser":    ua.Name,
-		"http.user_agent.os":         ua.OS,
-		"http.user_agent.os_Version": ua.OSVersion,
-		"http.user_agent.URL":        ua.URL,
-		"http.user_agent.device":     ua.Device,
+	uaMap = []logger.Attribute{
+		{Key: "http.user_agent.os", Value: ua.OS},
+		{Key: "http.user_agent.os_Version", Value: ua.OSVersion},
+		{Key: "http.user_agent.URL", Value: ua.URL},
+		{Key: "http.user_agent.device", Value: ua.Device},
 	}
-
-	switch {
-	case ua.IsChrome():
-		uaMap["http.user_agent.browser"] = "chrome"
-	case ua.IsSafari():
-		uaMap["http.user_agent.browser"] = "safari"
-	case ua.IsFirefox():
-		uaMap["http.user_agent.browser"] = "firefox"
-	case ua.IsOpera():
-		uaMap["http.user_agent.browser"] = "opera"
-	case ua.IsInternetExplorer():
-		uaMap["http.user_agent.browser"] = "internet_explorer"
-	case ua.IsEdge():
-		uaMap["http.user_agent.browser"] = "edge"
-	default:
-		uaMap["http.user_agent.browser"] = "unknown"
-	}
-
-	uaMap["http.user_agent.browser_version"] = ua.Version
 
 	switch {
 	case ua.Mobile:
-		uaMap["http.user_agent.type"] = "mobile"
+		uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.type", Value: "mobile"})
 	case ua.Tablet:
-		uaMap["http.user_agent.type"] = "tablet"
+		uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.type", Value: "tablet"})
 	case ua.Desktop:
-		uaMap["http.user_agent.type"] = "desktop"
-	case ua.IsFacebookbot():
-		uaMap["http.user_agent.type"] = "facebook_bot"
-	case ua.IsTwitterbot():
-		uaMap["http.user_agent.type"] = "twitter_bot"
-	case ua.IsGooglebot():
-		uaMap["http.user_agent.type"] = "google_bot"
-	case ua.Bot:
-		uaMap["http.user_agent.type"] = "bot"
-	default:
-		uaMap["http.user_agent.type"] = "unknown"
+		uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.type", Value: "desktop"})
+		//case ua.Bot:
+		//	uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.type", Value: "bot"})
+	}
+
+	if ua.Mobile || ua.Tablet || ua.Desktop {
+		switch {
+		case ua.IsChrome():
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser", Value: "chrome"})
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser_version", Value: ua.Version})
+		case ua.IsSafari():
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser", Value: "safari"})
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser_version", Value: ua.Version})
+		case ua.IsFirefox():
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser", Value: "firefox"})
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser_version", Value: ua.Version})
+		case ua.IsOpera():
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser", Value: "opera"})
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser_version", Value: ua.Version})
+		case ua.IsInternetExplorer() || strings.Contains(rawUserAgent, "Trident"):
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser", Value: "internet_explorer"})
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser_version", Value: ua.Version})
+		case ua.IsEdge():
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser", Value: "edge"})
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser_version", Value: ua.Version})
+		default:
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser", Value: ""})
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser_version", Value: ""})
+		}
+	}
+
+	if ua.Bot {
+		switch {
+		case ua.IsGooglebot():
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.type", Value: "google_bot"})
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser", Value: "googlebot"})
+		default:
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.type", Value: "bot"})
+			uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.browser", Value: "unknown"})
+		}
+	}
+
+	for k, atr := range uaMap {
+		s := fmt.Sprintf("%v", atr.Value)
+		if len(s) == 0 {
+			uaMap[k].Value = "unknown"
+		}
 	}
 
 	return

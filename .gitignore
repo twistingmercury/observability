@@ -1,6 +1,9 @@
 [Bb]in/
+_local/
 **/*.env
 **/*.out
+
+
 
 # Mac OS
 # General

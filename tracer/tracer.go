@@ -1,3 +1,4 @@
+// Package tracer provides a wrapper around OpenTelemetry to add standard fields to the span.
 package tracer
 
 import (
@@ -74,7 +75,9 @@ var commonAttrs = []attribute.KeyValue{
 }
 
 // New starts a new span with the given name and returns the context and span.
-func New(spanCtx context.Context, spanName string, attributes ...attribute.KeyValue) (ctx context.Context, span trace.Span) {
+// If spanCtx is nil, context.Background() is used.
+// The arg kind is used to set the span kind. The constant trace.SpanKind is defined here: https://pkg.go.dev/go.opentelemetry.io/otel/trace@v1.15.1#SpanKind
+func New(spanCtx context.Context, spanName string, kind trace.SpanKind, attributes ...attribute.KeyValue) (ctx context.Context, span trace.Span) {
 	if spanCtx == nil {
 		spanCtx = context.Background()
 	}
@@ -86,17 +89,19 @@ func New(spanCtx context.Context, spanName string, attributes ...attribute.KeyVa
 	ctx, span = tracer.Start(
 		spanCtx,
 		spanName,
-		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithSpanKind(kind),
 		trace.WithAttributes(commonAttrs...))
 
 	return
 }
 
+// EndOK ends the span with a status of "ok".
 func EndOK(span trace.Span) {
 	span.SetStatus(otelCodes.Ok, "ok")
 	span.End()
 }
 
+// EndError ends the span with a status of "error".
 func EndError(span trace.Span, err error) {
 	span.RecordError(err)
 	span.SetStatus(otelCodes.Error, "error")
