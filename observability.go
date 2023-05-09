@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// GrpcConnectionOptions are the options for connecting to the OpenTelemetry collector via gRPC.
 type GrpcConnectionOptions struct {
 	TransportCreds  credentials.TransportCredentials
 	WaitForConnect  bool
@@ -16,6 +17,7 @@ type GrpcConnectionOptions struct {
 	URL             string
 }
 
+// NewGrpcConnection dials the OpenTelemetry collector endpoint.
 func NewGrpcConnection(opts GrpcConnectionOptions) (conn *grpc.ClientConn, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), opts.WaitTimeSeconds*time.Second)
 	defer cancel()
@@ -25,13 +27,10 @@ func NewGrpcConnection(opts GrpcConnectionOptions) (conn *grpc.ClientConn, err e
 		return newGrpcConnWithBlock(ctx, opts.URL, opts.TransportCreds)
 	default:
 		return newGrpcConn(ctx, opts.URL, opts.TransportCreds)
-
 	}
 }
 
-// NewGrpcConnection dials the OpenTelemetry collector endpoint. This uses a simple backoff algorithm to retry
-// the connection if it fails. Normally, this should only happen if the collector and agent are started at the same,
-// when running locally.
+// newGrpcConn dials the OpenTelemetry collector endpoint.
 func newGrpcConn(ctx context.Context, otelEP string, creds credentials.TransportCredentials) (conn *grpc.ClientConn, err error) {
 	logrus.Debugf("connecting to observability endpoint `grpc://%s`", otelEP)
 
@@ -45,6 +44,7 @@ func newGrpcConn(ctx context.Context, otelEP string, creds credentials.Transport
 	return
 }
 
+// newGrpcConnWithBlock dials the OpenTelemetry collector endpoint it will not return until a connection is established or the context is canceled.
 func newGrpcConnWithBlock(ctx context.Context, otelEP string, creds credentials.TransportCredentials) (conn *grpc.ClientConn, err error) {
 	conn, err = grpc.DialContext(ctx, otelEP,
 		grpc.WithTransportCredentials(creds),
