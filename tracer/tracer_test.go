@@ -54,7 +54,9 @@ func TestTracing(t *testing.T) {
 	shutdown, err := tracing.Initialize(conn)
 	assert.NoError(t, err)
 	assert.NotNil(t, shutdown)
-	defer shutdown(ctx)
+	defer func() {
+		_ = shutdown(ctx)
+	}()
 
 	attribs := []attribute.KeyValue{
 		attribute.String("test", "test"),
