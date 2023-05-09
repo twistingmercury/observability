@@ -1,15 +1,13 @@
 package middleware_test
 
 import (
+	"bytes"
 	"context"
+	"github.com/sirupsen/logrus"
 	"github.com/twistingmercury/observability/logger"
 	"github.com/twistingmercury/observability/metrics"
+	"github.com/twistingmercury/observability/testTools"
 	tracing "github.com/twistingmercury/observability/tracer"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/test/bufconn"
-	"log"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,38 +18,20 @@ import (
 	"github.com/twistingmercury/observability/middleware"
 )
 
-const bufSize = 1024 * 1024
-
-var (
-	lis *bufconn.Listener
-	svr *grpc.Server
-)
-
-func setupTestSvr() {
-	lis = bufconn.Listen(bufSize)
-	svr = grpc.NewServer()
-	go func() {
-		if err := svr.Serve(lis); err != nil {
-			log.Fatalf("Server exited with error: %v", err)
-		}
-	}()
-}
-
-func bufDialer(context.Context, string) (net.Conn, error) {
-	return lis.Dial()
-}
-
 func TestInitialize(t *testing.T) {
-	setupTestSvr()
-	defer svr.Stop()
+	logBuf := &bytes.Buffer{}
+	logger.Initialize(logBuf, logrus.DebugLevel, &logrus.JSONFormatter{})
 
-	ctx := context.Background()
-	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	ctx := context.TODO()
+	conn, err := testTools.DialContext(ctx)
 	assert.NoError(t, err)
 
 	shutdown, err := metrics.Initialize("unit.test", conn)
 	assert.NoError(t, err)
-	_ = shutdown(context.TODO())
+	defer func() {
+		testTools.Reset(ctx)
+		_ = shutdown(ctx)
+	}()
 
 	_, err = metrics.Initialize("unit-tests", conn)
 	assert.NoError(t, err, "failed to initialize metrics")
@@ -246,11 +226,9 @@ func TestParseHeaders(t *testing.T) {
 }
 
 func TestLogRequestMiddleware(t *testing.T) {
-	setupTestSvr()
-	defer svr.Stop()
 
 	ctx := context.Background()
-	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := testTools.DialContext(ctx)
 	assert.NoError(t, err)
 
 	_, err = metrics.Initialize("unit-tests", conn)

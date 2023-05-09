@@ -1,50 +1,31 @@
 package metrics_test
 
 import (
+	"bytes"
 	"context"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/twistingmercury/observability/logger"
 	"github.com/twistingmercury/observability/metrics"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/test/bufconn"
-	"log"
-	"net"
+	"github.com/twistingmercury/observability/testTools"
 	"testing"
 )
 
-const bufSize = 1024 * 1024
-
-var (
-	lis *bufconn.Listener
-	svr *grpc.Server
-)
-
-func setupTestSvr() {
-	lis = bufconn.Listen(bufSize)
-	svr = grpc.NewServer()
-	go func() {
-		if err := svr.Serve(lis); err != nil {
-			log.Fatalf("Server exited with error: %v", err)
-		}
-	}()
-}
-
-func bufDialer(context.Context, string) (net.Conn, error) {
-	return lis.Dial()
-}
-
 func TestMetrics(t *testing.T) {
-	setupTestSvr()
-	defer svr.Stop()
+	logBuf := &bytes.Buffer{}
+	logger.Initialize(logBuf, logrus.DebugLevel, &logrus.JSONFormatter{})
 
 	ctx := context.Background()
-	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := testTools.DialContext(ctx)
 	assert.NoError(t, err)
 
 	shutdown, err := metrics.Initialize("unit.test", conn)
 	assert.NoError(t, err)
 
-	_ = shutdown(context.TODO())
+	defer func() {
+		testTools.Reset(ctx)
+		_ = shutdown(ctx)
+	}()
 
 	upDownCounter, err := metrics.NewUpDownCounter("test_up_down_counter", "test up down counter")
 	assert.NoError(t, err)
@@ -62,13 +43,14 @@ func TestMetrics(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
+	logBuf := &bytes.Buffer{}
+	logger.Initialize(logBuf, logrus.DebugLevel, &logrus.JSONFormatter{})
+
 	_, err := metrics.Initialize("unit.test", nil)
 	assert.Error(t, err)
 
-	setupTestSvr()
-	defer svr.Stop()
 	ctx := context.Background()
-	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := testTools.DialContext(ctx)
 	assert.NoError(t, err)
 	_, err = metrics.Initialize("", conn)
 }
