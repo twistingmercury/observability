@@ -1,60 +1,32 @@
 package tracer_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/twistingmercury/observability/logger"
+	"github.com/twistingmercury/observability/testTools"
 	tracing "github.com/twistingmercury/observability/tracer"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/test/bufconn"
-	"log"
-	"net"
 	"testing"
 )
 
-const bufSize = 1024 * 1024
-
-var (
-	lis          *bufconn.Listener
-	svr          *grpc.Server
-	emptyTraceId string
-	emptySpanId  string
-)
-
-func setupTestSvr() {
-	lis = bufconn.Listen(bufSize)
-	svr = grpc.NewServer()
-	go func() {
-		if err := svr.Serve(lis); err != nil {
-			log.Fatalf("Server exited with error: %v", err)
-		}
-	}()
-
-	ts := new(trace.SpanContext)
-	emptyTraceId = ts.TraceID().String()
-	emptySpanId = ts.SpanID().String()
-
-}
-
-func bufDialer(context.Context, string) (net.Conn, error) {
-	return lis.Dial()
-}
-
 func TestTracing(t *testing.T) {
-	setupTestSvr()
-	defer svr.Stop()
+	logBuf := &bytes.Buffer{}
+	logger.Initialize(logBuf, logrus.DebugLevel, &logrus.JSONFormatter{})
 
 	ctx := context.Background()
-	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := testTools.DialContext(ctx)
 	assert.NoError(t, err)
 
 	shutdown, err := tracing.Initialize(conn)
 	assert.NoError(t, err)
 	assert.NotNil(t, shutdown)
 	defer func() {
+		testTools.Reset(ctx)
 		_ = shutdown(ctx)
 	}()
 
@@ -67,15 +39,15 @@ func TestTracing(t *testing.T) {
 	defer tracing.EndOK(span)
 	assert.NotNil(t, cCtx)
 	assert.NotNil(t, span)
-	assert.NotEqual(t, emptyTraceId, span.SpanContext().TraceID().String())
-	assert.NotEqual(t, emptySpanId, span.SpanContext().SpanID().String())
+	assert.NotEqual(t, testTools.EmptyTraceId(), span.SpanContext().TraceID().String())
+	assert.NotEqual(t, testTools.EmptySpanId(), span.SpanContext().SpanID().String())
 	defer tracing.EndOK(span)
 
 	dCtx, span := tracing.New(nil, "test_span", trace.SpanKindUnspecified)
 	defer tracing.EndOK(span)
 	assert.NotNil(t, dCtx)
 	assert.NotNil(t, span)
-	assert.NotEqual(t, emptyTraceId, span.SpanContext().TraceID().String())
-	assert.NotEqual(t, emptySpanId, span.SpanContext().SpanID().String())
+	assert.NotEqual(t, testTools.EmptyTraceId(), span.SpanContext().TraceID().String())
+	assert.NotEqual(t, testTools.EmptySpanId(), span.SpanContext().SpanID().String())
 	defer tracing.EndError(span, errors.New("test error"))
 }

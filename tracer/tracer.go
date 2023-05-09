@@ -36,11 +36,6 @@ func Initialize(conn *grpc.ClientConn) (func(context.Context) error, error) {
 		return nil, fmt.Errorf("failed to create resource: %w", err)
 	}
 
-	//conn, err := dialContext(otelEP)
-	//if err != nil {
-	//	return nil, fmt.Errorf("failed to create gRPC connection to collector: %w", err)
-	//}
-
 	// Set up a trace exporter
 	traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
 	if err != nil {
