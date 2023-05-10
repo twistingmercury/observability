@@ -27,9 +27,9 @@ services:
     container_name: otel-collector-ctnr
     image: otel/opentelemetry-collector-contrib:latest
     restart: always
-    command: [ "--config=/etc/otel-collector-config.yaml"]
+    command: [ "--observeCfg=/etc/otel-collector-observeCfg.yaml"]
     volumes:
-      - ${PWD}/example-otel-collector-config.yaml:/etc/otel-collector-config.yaml
+      - ${PWD}/example-otel-collector-observeCfg.yaml:/etc/otel-collector-observeCfg.yaml
     environment:
         DD_API_KEY: ${DD_API_KEY}
     ports:

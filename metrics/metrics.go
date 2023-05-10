@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/twistingmercury/observability/config"
 	"github.com/twistingmercury/observability/logger"
+	"github.com/twistingmercury/observability/observeCfg"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/metric"
@@ -19,13 +19,13 @@ var (
 	meter     metric.Meter
 	namespace string
 	attribs   = []attribute.KeyValue{
-		{Key: "service", Value: attribute.StringValue(config.ServiceName())},
-		{Key: "host", Value: attribute.StringValue(config.HostName())},
-		{Key: "container_id", Value: attribute.StringValue(config.HostName())},
-		{Key: "env", Value: attribute.StringValue(config.Environment())},
-		{Key: "service_version", Value: attribute.StringValue(config.Version())},
-		{Key: "build_date", Value: attribute.StringValue(config.BuildDate())},
-		{Key: "commit_hash", Value: attribute.StringValue(config.CommitHash())}}
+		{Key: "service", Value: attribute.StringValue(observeCfg.ServiceName())},
+		{Key: "host", Value: attribute.StringValue(observeCfg.HostName())},
+		{Key: "container_id", Value: attribute.StringValue(observeCfg.HostName())},
+		{Key: "env", Value: attribute.StringValue(observeCfg.Environment())},
+		{Key: "service_version", Value: attribute.StringValue(observeCfg.Version())},
+		{Key: "build_date", Value: attribute.StringValue(observeCfg.BuildDate())},
+		{Key: "commit_hash", Value: attribute.StringValue(observeCfg.CommitHash())}}
 )
 
 // Initialize sets up the metrics using the given grpc connection and namespace.
@@ -62,8 +62,8 @@ func Initialize(ns string, conn *grpc.ClientConn) (func(context context.Context)
 	meterProvider := sdkMetric.NewMeterProvider(option...)
 	global.SetMeterProvider(meterProvider)
 	meter = global.Meter(
-		fmt.Sprintf("%s.%s", namespace, config.ServiceName()),
-		metric.WithInstrumentationVersion(config.Version()),
+		fmt.Sprintf("%s.%s", namespace, observeCfg.ServiceName()),
+		metric.WithInstrumentationVersion(observeCfg.Version()),
 		metric.WithInstrumentationAttributes(attribs...),
 	)
 
@@ -77,7 +77,7 @@ func NewUpDownCounter(name, description string) (metric.Int64UpDownCounter, erro
 		metric.WithDescription(description),
 		metric.WithUnit("1"),
 	}
-	fname := fmt.Sprintf("%s.%s.%s", namespace, config.ServiceName(), name)
+	fname := fmt.Sprintf("%s.%s.%s", namespace, observeCfg.ServiceName(), name)
 	logger.Debug("new up/down counter created", logger.Attribute{Key: "name", Value: fname})
 	return meter.Int64UpDownCounter(fname, opt...)
 }
@@ -88,7 +88,7 @@ func NewCounter(name, description string) (metric.Int64Counter, error) {
 		metric.WithDescription(description),
 		metric.WithUnit("1"),
 	}
-	fname := fmt.Sprintf("%s.%s.%s", namespace, config.ServiceName(), name)
+	fname := fmt.Sprintf("%s.%s.%s", namespace, observeCfg.ServiceName(), name)
 	logger.Debug("new up/down counter created", logger.Attribute{Key: "name", Value: fname})
 	return meter.Int64Counter(fname, opt...)
 }
@@ -100,7 +100,7 @@ func NewHistogram(name, description string) (metric.Float64Histogram, error) {
 		metric.WithUnit("1"),
 	}
 
-	fname := fmt.Sprintf("%s.%s.%s", namespace, config.ServiceName(), name)
+	fname := fmt.Sprintf("%s.%s.%s", namespace, observeCfg.ServiceName(), name)
 	logger.Debug("new histogram created", logger.Attribute{Key: "name", Value: fname})
 	return meter.Float64Histogram(fname, opt...)
 }
