@@ -72,7 +72,7 @@ func Initialize(ns string, conn *grpc.ClientConn) (func(context context.Context)
 }
 
 // NewUpDownCounter creates a new up/down counter using the given name and description.
-func NewUpDownCounter(name, description string) (metric.Int64UpDownCounter, error) {
+func NewUpDownCounter(name, description string) (c metric.Int64UpDownCounter, err error) {
 	opt := []metric.Int64UpDownCounterOption{
 		metric.WithDescription(description),
 		metric.WithUnit("1"),
@@ -83,7 +83,7 @@ func NewUpDownCounter(name, description string) (metric.Int64UpDownCounter, erro
 }
 
 // NewCounter creates a new counter using the given name and description.
-func NewCounter(name, description string) (metric.Int64Counter, error) {
+func NewCounter(name, description string) (c metric.Int64Counter, err error) {
 	opt := []metric.Int64CounterOption{
 		metric.WithDescription(description),
 		metric.WithUnit("1"),
@@ -94,7 +94,7 @@ func NewCounter(name, description string) (metric.Int64Counter, error) {
 }
 
 // NewHistogram creates a new histogram using the given name and description.
-func NewHistogram(name, description string) (metric.Float64Histogram, error) {
+func NewHistogram(name, description string) (c metric.Float64Histogram, err error) {
 	opt := []metric.Float64HistogramOption{
 		metric.WithDescription(description),
 		metric.WithUnit("1"),
