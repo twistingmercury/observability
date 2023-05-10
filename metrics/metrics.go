@@ -1,3 +1,4 @@
+// Package metrics provides a wrapper around the OpenTelemetry metrics API.
 package metrics
 
 import (
