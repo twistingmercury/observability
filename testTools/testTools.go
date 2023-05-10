@@ -1,3 +1,4 @@
+// Package testTools provides tools for testing functionality that requires a gRPC connection.
 package testTools
 
 import (
@@ -19,6 +20,7 @@ var (
 	emptySpanId  string
 )
 
+// DialContext returns a grpc.ClientConn connected to a bufconn.Listener
 func DialContext(ctx context.Context) (*grpc.ClientConn, error) {
 	setupTestSvr()
 	return grpc.DialContext(ctx,
@@ -27,15 +29,18 @@ func DialContext(ctx context.Context) (*grpc.ClientConn, error) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 }
 
+// Reset closes the bufconn.Listener and stops the grpc.Server
 func Reset(ctx context.Context) {
 	svr.Stop()
 	_ = lis.Close()
 }
 
+// EmptyTraceId returns a string representation of an empty trace id
 func EmptyTraceId() string {
 	return emptyTraceId
 }
 
+// EmptySpanId returns a string representation of an empty span id
 func EmptySpanId() string {
 	return emptySpanId
 }

@@ -8,7 +8,7 @@ import (
 	"io"
 
 	"github.com/sirupsen/logrus"
-	"github.com/twistingmercury/observability/config"
+	"github.com/twistingmercury/observability/observeCfg"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -86,13 +86,13 @@ func FatalWithSpanContext(sCtx context.Context, err error, msg string, attribs .
 
 // ==================== helpers ====================
 var stdFields = map[string]interface{}{
-	"service":      config.ServiceName(),
-	"version":      config.Version(),
-	"commit_hash":  config.CommitHash(),
-	"env":          config.Environment(),
-	"build_date":   config.BuildDate(),
-	"host":         config.HostName(),
-	"container_id": config.HostName(),
+	"service":      observeCfg.ServiceName(),
+	"version":      observeCfg.Version(),
+	"commit_hash":  observeCfg.CommitHash(),
+	"env":          observeCfg.Environment(),
+	"build_date":   observeCfg.BuildDate(),
+	"host":         observeCfg.HostName(),
+	"container_id": observeCfg.HostName(),
 }
 
 // withFields adds standard fields to the logs fields.

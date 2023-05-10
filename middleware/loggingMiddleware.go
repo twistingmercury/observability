@@ -3,6 +3,7 @@ package middleware
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/trace"
 	"strings"
 	"time"
@@ -21,61 +22,64 @@ var (
 	avgReqDur metric.Float64Histogram
 )
 
-// Initialize sets up the instrumentation middleware for the application.
-func Initialize() error {
+func initialize() {
 	cr, err := metrics.NewUpDownCounter("http.active_requests", "The current number of active requests being served.")
 	if err != nil {
-		return fmt.Errorf("failed to create active_requests counter: %w", err)
+		logrus.Panic(fmt.Errorf("failed to create active_requests up down counter: %w", err))
 	}
 
 	tr, err := metrics.NewCounter("http.total_requests_served", "The total number of requests served.")
 	if err != nil {
-		return fmt.Errorf("failed to create total_requests_served counter: %w", err)
+		logrus.Panic(fmt.Errorf("failed to create total_requests_served counter: %w", err))
 	}
 
 	ar, err := metrics.NewHistogram("http.request_duration_seconds", "The request duration in seconds.")
+	if err != nil {
+		logrus.Panic(fmt.Errorf("failed to create request_duration_seconds histogram: %w", err))
+	}
 	activeReq = cr
 	totalReq = tr
 	avgReqDur = ar
-
-	return nil
 }
 
 // LogRequest logs the incoming request and starts the trace.
-func LogRequest(c *gin.Context) {
-	rCtx, span := tracer.New(c.Request.Context(), "inbound-request", trace.SpanKindServer)
-	activeReq.Add(rCtx, 1)
-	totalReq.Add(rCtx, 1)
-	s := time.Now()
+func LogRequest() gin.HandlerFunc {
+	initialize()
+	return func(ctx *gin.Context) {
+		rCtx, span := tracer.New(ctx.Request.Context(), "inbound-request", trace.SpanKindServer)
+		activeReq.Add(rCtx, 1)
+		totalReq.Add(rCtx, 1)
+		s := time.Now()
 
-	defer func() {
-		tracer.EndOK(span)
-		activeReq.Add(rCtx, -1)
-		avgReqDur.Record(rCtx, time.Since(s).Seconds())
-	}()
+		defer func() {
+			tracer.EndOK(span)
+			activeReq.Add(rCtx, -1)
+			avgReqDur.Record(rCtx, time.Since(s).Seconds())
+		}()
 
-	c.Request = c.Request.Clone(rCtx)
+		ctx.Request = ctx.Request.Clone(rCtx)
 
-	attribs := []logger.Attribute{
-		{Key: "http.method", Value: c.Request.Method},
-		{Key: "http.path", Value: c.Request.URL.Path},
-		{Key: "http.remoteAddr", Value: c.Request.RemoteAddr},
+		attribs := []logger.Attribute{
+			{Key: "http.method", Value: ctx.Request.Method},
+			{Key: "http.path", Value: ctx.Request.URL.Path},
+			{Key: "http.remoteAddr", Value: ctx.Request.RemoteAddr},
+		}
+
+		if rawq := ctx.Request.URL.RawQuery; len(rawq) > 0 {
+			attribs = append(attribs, logger.Attribute{Key: "http.query", Value: rawq})
+		}
+
+		for _, v := range ParseHeaders(ctx.Request.Header) {
+			attribs = append(attribs, v)
+		}
+
+		for _, v := range ParseUserAgent(ctx.Request.UserAgent()) {
+			attribs = append(attribs, v)
+		}
+
+		logger.InfoWithSpanContext(ctx.Request.Context(), "inbound-request", attribs...)
+		ctx.Next()
 	}
-
-	if rawq := c.Request.URL.RawQuery; len(rawq) > 0 {
-		attribs = append(attribs, logger.Attribute{Key: "http.query", Value: rawq})
-	}
-
-	for _, v := range ParseHeaders(c.Request.Header) {
-		attribs = append(attribs, v)
-	}
-
-	for _, v := range ParseUserAgent(c.Request.UserAgent()) {
-		attribs = append(attribs, v)
-	}
-
-	logger.InfoWithSpanContext(c.Request.Context(), "inbound-request", attribs...)
-	c.Next()
 }
 
 // ParseHeaders parses the headers and returns a map of attributes.

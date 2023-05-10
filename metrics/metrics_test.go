@@ -13,7 +13,23 @@ import (
 
 func TestMetrics(t *testing.T) {
 	logBuf := &bytes.Buffer{}
-	logger.Initialize(logBuf, logrus.DebugLevel, &logrus.JSONFormatter{})
+	logger.Initialize(logBuf, logrus.DebugLevel, &logrus.TextFormatter{})
+
+	t.Run("NewUpDownCounter_panics", func(t *testing.T) {
+		assert.Panics(t, func() {
+			_, _ = metrics.NewUpDownCounter("my-counter", "does stuff")
+		})
+	})
+	t.Run("NewCounter_panics", func(t *testing.T) {
+		assert.Panics(t, func() {
+			_, _ = metrics.NewCounter("my-counter", "does stuff")
+		})
+	})
+	t.Run("NewHistogram_panics", func(t *testing.T) {
+		assert.Panics(t, func() {
+			_, _ = metrics.NewHistogram("my-counter", "does stuff")
+		})
+	})
 
 	ctx := context.Background()
 	conn, err := testTools.DialContext(ctx)
@@ -25,6 +41,7 @@ func TestMetrics(t *testing.T) {
 	defer func() {
 		testTools.Reset(ctx)
 		_ = shutdown(ctx)
+		conn.Close()
 	}()
 
 	upDownCounter, err := metrics.NewUpDownCounter("test_up_down_counter", "test up down counter")
