@@ -6,11 +6,12 @@ package observeCfg
 
 import (
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"os"
-	"strings"
 )
 
 type EnvironmentType string
@@ -47,12 +48,12 @@ const (
 
 // ==================== flags ====================
 var (
-	fEnv = pflag.String(environFlag, "", "Set the environment the service is running in (development, staging, production, test)")
+	fEnv = pflag.String(environFlag, "", "Set the environment in which the service is running [ localhost | dev | test | stage | prod ]")
 	fVer = pflag.Bool(versionFlag, false, "Display current version information for the app")
 	help = pflag.Bool(helpFlag, false, "Display help information")
-	fLlv = pflag.String(logLevelFlag, "", "Sets the log level (`debug`, `info`, `warn`, `error`, or `fatal`)")
-	fTep = pflag.String(traceEndpointFlag, "", "The gRPC endpoint where OpenTelemetry traces are to be sent to; example: `10.9.8.7:4317`")
-	fMep = pflag.String(metricsEndpointFlag, "", "The gRPC endpoint where OpenTelemetry metrics are to be sent to; example: `10.9.8.7:4327`")
+	fLlv = pflag.String(logLevelFlag, "", "Sets the log level [ debug | info | warn | error | fatal ]")
+	fTep = pflag.String(traceEndpointFlag, "", "The host and port of the otel collector where traces are to be sent [<server>:<port>]")
+	fMep = pflag.String(metricsEndpointFlag, "", "The host and port of the otel collector where metrics are to be sent [<server>:<port>]")
 )
 
 var (
@@ -82,6 +83,7 @@ func Initialize(s, b, v, c string) {
 	version = v
 	svcName = s
 	bindFlags()
+	viper.AutomaticEnv()
 	parseConfig()
 	validateConfig()
 }
@@ -92,7 +94,6 @@ func bindFlags() {
 	_ = viper.BindPFlag(LogLevelEnvVar, pflag.Lookup(logLevelFlag))
 	_ = viper.BindPFlag(TraceEndpointEnvVar, pflag.Lookup(traceEndpointFlag))
 	_ = viper.BindPFlag(MetricsEndpointEnvVar, pflag.Lookup(metricsEndpointFlag))
-	viper.AutomaticEnv()
 }
 
 func parseConfig() {
