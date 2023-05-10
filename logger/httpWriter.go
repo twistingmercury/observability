@@ -46,27 +46,14 @@ func NewHttpWriter(url string) HttpWriter {
 
 // Write satisfies the io.Writer interface and writes data to the HTTP endpoint.
 func (rw *httpWriter) Write(p []byte) (n int, err error) {
-	if _, err := rw.buffer.Write(p); err != nil {
-		return 0, err
-	}
+	n, err = rw.buffer.Write(p)
 	defer rw.buffer.Reset()
 
-	n = len(p)
-	req, err := http.NewRequest("POST", rw.endpoint, rw.buffer)
-	if err != nil {
-		return 0, err
-	}
+	req, _ := http.NewRequest("POST", rw.endpoint, rw.buffer)
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := rw.client.Do(req)
 
-	resp, err := rw.client.Do(req)
-	if err != nil {
-		return n, err
-	}
-	defer func(Body io.ReadCloser) {
-		tErr := Body.Close()
-		if tErr != nil {
-			err = tErr
-		}
-	}(resp.Body)
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("failed to write to the RESTful endpoint %s; status code: %s", rw.endpoint, resp.Status)

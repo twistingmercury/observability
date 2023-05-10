@@ -35,8 +35,8 @@ func TestInitialize(t *testing.T) {
 
 	_, err = metrics.Initialize("unit-tests", conn)
 	assert.NoError(t, err, "failed to initialize metrics")
-	err = middleware.Initialize()
-	assert.NoError(t, err, "failed to initialize middleware")
+	f := middleware.LogRequest()
+	assert.NotNil(t, f)
 }
 
 type testCase struct {
@@ -236,12 +236,11 @@ func TestLogRequestMiddleware(t *testing.T) {
 
 	_, err = tracing.Initialize(conn)
 
-	err = middleware.Initialize()
 	assert.NoError(t, err, "failed to initialize middleware")
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.Use(middleware.LogRequest)
+	router.Use(middleware.LogRequest())
 	router.GET("/test", func(c *gin.Context) {
 		c.String(http.StatusOK, "OK")
 	})

@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/twistingmercury/observability/config"
+	"github.com/twistingmercury/observability/observeCfg"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -115,7 +115,7 @@ func TestWithTracing(t *testing.T) {
 		)
 		otel.SetTextMapPropagator(propagation.TraceContext{})
 		otel.SetTracerProvider(tracerProvider)
-		tracer := tracerProvider.Tracer(config.ServiceName())
+		tracer := tracerProvider.Tracer(observeCfg.ServiceName())
 
 		ctx, span := tracer.Start(context.Background(), test.expectedLevel)
 

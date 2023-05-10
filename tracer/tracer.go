@@ -4,7 +4,7 @@ package tracer
 import (
 	"context"
 	"fmt"
-	"github.com/twistingmercury/observability/config"
+	"github.com/twistingmercury/observability/observeCfg"
 	"go.opentelemetry.io/otel/attribute"
 	otelCodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -26,10 +26,10 @@ func Initialize(conn *grpc.ClientConn) (func(context.Context) error, error) {
 
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
-			semconv.ServiceNameKey.String(config.ServiceName()),
-			semconv.ServiceVersionKey.String(config.Version()),
-			attribute.String("service.build_date", config.BuildDate()),
-			attribute.String("service.commit", config.CommitHash()),
+			semconv.ServiceNameKey.String(observeCfg.ServiceName()),
+			semconv.ServiceVersionKey.String(observeCfg.Version()),
+			attribute.String("service.build_date", observeCfg.BuildDate()),
+			attribute.String("service.commit", observeCfg.CommitHash()),
 		),
 	)
 	if err != nil {
@@ -51,7 +51,7 @@ func Initialize(conn *grpc.ClientConn) (func(context.Context) error, error) {
 	// set global propagator to trace context (the default is no-op).
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 	otel.SetTracerProvider(tracerProvider)
-	tracer = tracerProvider.Tracer(config.ServiceName())
+	tracer = tracerProvider.Tracer(observeCfg.ServiceName())
 
 	// Shutdown will flush any remaining spans and shut down the exporter.
 	return tracerProvider.Shutdown, nil
@@ -60,13 +60,13 @@ func Initialize(conn *grpc.ClientConn) (func(context.Context) error, error) {
 // Attributes represent additional key-value descriptors that can be bound
 // to a metric observer or recorder.
 var commonAttrs = []attribute.KeyValue{
-	semconv.ServiceNameKey.String(config.ServiceName()),
-	semconv.ServiceVersionKey.String(config.Version()),
-	attribute.String("service.build_date", config.BuildDate()),
-	attribute.String("service.commit", config.CommitHash()),
-	attribute.String("service.environment", config.Environment()),
-	attribute.String("host", config.HostName()),
-	attribute.String("container_id", config.HostName()),
+	semconv.ServiceNameKey.String(observeCfg.ServiceName()),
+	semconv.ServiceVersionKey.String(observeCfg.Version()),
+	attribute.String("service.build_date", observeCfg.BuildDate()),
+	attribute.String("service.commit", observeCfg.CommitHash()),
+	attribute.String("service.environment", observeCfg.Environment()),
+	attribute.String("host", observeCfg.HostName()),
+	attribute.String("container_id", observeCfg.HostName()),
 }
 
 // New starts a new span with the given name and returns the context and span.
