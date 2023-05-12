@@ -5,6 +5,7 @@
 package observeCfg
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -38,7 +39,7 @@ const (
 	LogLevelEnvVar        = "LOG_LEVEL"
 	EnvironEnvVar         = "ENVIRONMENT"
 
-	environFlag         = "environment"
+	environFlag         = "env"
 	versionFlag         = "version"
 	helpFlag            = "help"
 	logLevelFlag        = "log-level"
@@ -75,40 +76,39 @@ var (
 )
 
 // Initialize sets the build information, and invokes `pflag.Parse()`.
-func Initialize(s, b, v, c string) {
-	viper.Reset()
-
+func Initialize(s, b, v, c string) (err error) {
 	commitHash = c
 	buildDate = b
 	version = v
 	svcName = s
-	bindFlags()
+	if err = bindFlags(); err != nil {
+		return
+	}
 	viper.AutomaticEnv()
 	parseConfig()
-	validateConfig()
+	return validateConfig()
 }
 
-func bindFlags() {
+func bindFlags() (err error) {
 	pflag.Parse()
-	_ = viper.BindPFlag(EnvironEnvVar, pflag.Lookup(environFlag))
-	_ = viper.BindPFlag(LogLevelEnvVar, pflag.Lookup(logLevelFlag))
-	_ = viper.BindPFlag(TraceEndpointEnvVar, pflag.Lookup(traceEndpointFlag))
-	_ = viper.BindPFlag(MetricsEndpointEnvVar, pflag.Lookup(metricsEndpointFlag))
+	if err = viper.BindPFlag(EnvironEnvVar, pflag.Lookup(environFlag)); err != nil {
+		return
+	}
+	if err = viper.BindPFlag(LogLevelEnvVar, pflag.Lookup(logLevelFlag)); err != nil {
+		return
+	}
+	if err = viper.BindPFlag(TraceEndpointEnvVar, pflag.Lookup(traceEndpointFlag)); err != nil {
+		return
+	}
+	if err = viper.BindPFlag(MetricsEndpointEnvVar, pflag.Lookup(metricsEndpointFlag)); err != nil {
+		return
+	}
+	return
 }
 
 func parseConfig() {
-	if *help {
-		pflag.Usage()
-		os.Exit(0)
-	}
-
-	if *fVer {
-		fmt.Printf("Version: %s, Build Date: %s, Build Commit: %s\n",
-			version,
-			buildDate,
-			commitHash)
-		os.Exit(0)
-	}
+	ShowHelp()
+	ShowHelp()
 
 	hn, _ := os.Hostname()
 	hostName = hn
@@ -133,35 +133,36 @@ func parseConfig() {
 	}
 }
 
-func validateConfig() {
+func validateConfig() error {
 	if len(environ) == 0 {
-		logrus.Panicf("environment is required")
+		return errors.New("environment is required")
 	}
 	if len(levelStr) == 0 {
-		logrus.Panicf("log level is required")
+		return errors.New("log level is required")
 	}
 	if len(traceEP) == 0 {
-		logrus.Panicf("trace endpoint is required")
+		return errors.New("trace endpoint is required")
 	}
 	if len(metricsEP) == 0 {
-		logrus.Panicf("metrics endpoint is required")
+		return errors.New("metrics endpoint is required")
 	}
 	if len(svcName) == 0 {
-		logrus.Panicf("svcName is required")
+		return errors.New("svcName is required")
 	}
 
 	if !strings.Contains(environs, environ) {
-		logrus.Panicf("invalid environment: %s; accepted values are `%s`, `%s`, `%s`, `%s`, and  `%s`",
+		return fmt.Errorf("invalid environment: %s; accepted values are `%s`, `%s`, `%s`, `%s`, and  `%s`",
 			environ, Dev, Stage, Production, Test, local)
 	}
 
 	ll, err := logrus.ParseLevel(levelStr)
 	if err != nil {
-		logrus.Panicf("invalid log level: %s; accepted levels are `%s`, `%s`, `%s`, `%s`, and  `%s`",
+		return fmt.Errorf("invalid log level: %s; accepted levels are `%s`, `%s`, `%s`, `%s`, and  `%s`",
 			levelStr, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, FatalLevel)
 	}
-
 	logLevel = ll
+
+	return nil
 }
 
 // CommitHash returns the VCS reference of the build. It is set by the build process.
@@ -203,7 +204,7 @@ func TraceEndpoint() string {
 }
 
 // MetricsEndpoint returns the OpenTelemetry endpoint for metrics to be sent to. It is set by the environment variable
-// `METRICS_EP` and can be overridden by the `--metrics-endpoint` flag.
+// `METRICS_ENDPOINT` and can be overridden by the `--metrics-endpoint` flag.
 func MetricsEndpoint() string {
 	return metricsEP
 }
@@ -211,4 +212,22 @@ func MetricsEndpoint() string {
 // HostName returns the hostname of the machine the svcName is running on.
 func HostName() string {
 	return hostName
+}
+
+// ShowHelp displays the help information and exits if the `--help` flag is set.
+func ShowHelp() {
+	if !*help {
+		return
+	}
+	pflag.Usage()
+	os.Exit(0)
+}
+
+// ShowVersion displays the version information and exits if the `--version` flag is set.
+func ShowVersion() {
+	if !*fVer {
+		return
+	}
+	fmt.Printf("Version: %s, Build Date: %s, Build Commit: %s\n", version, buildDate, commitHash)
+	os.Exit(0)
 }
