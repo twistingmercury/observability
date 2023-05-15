@@ -59,11 +59,11 @@ var (
 
 var (
 	// build info
-	commitHash = "n/a"
-	buildDate  = "n/a"
-	version    = "n/a"
-	svcName    = "n/a"
-	hostName   = "n/a"
+	commitHash string
+	bDate      string
+	version    string
+	name       string
+	hostName   string
 
 	// observability config
 	levelStr  string
@@ -76,11 +76,23 @@ var (
 )
 
 // Initialize sets the build information, and invokes `pflag.Parse()`.
-func Initialize(s, b, v, c string) (err error) {
-	commitHash = c
-	buildDate = b
-	version = v
-	svcName = s
+func Initialize(svcName, buildDate, ver, commit string) (err error) {
+	switch {
+	case len(svcName) == 0:
+		return errors.New("arg svcName cannot be empty")
+	case len(buildDate) == 0:
+		return errors.New("arg buildDate cannot be empty")
+	case len(ver) == 0:
+		return errors.New("arg ver cannot be empty")
+	case len(commit) == 0:
+		return errors.New("arg commit cannot be empty")
+	}
+
+	commitHash = commit
+	bDate = buildDate
+	version = ver
+	name = svcName
+
 	if err = bindFlags(); err != nil {
 		return
 	}
@@ -146,9 +158,6 @@ func validateConfig() error {
 	if len(metricsEP) == 0 {
 		return errors.New("metrics endpoint is required")
 	}
-	if len(svcName) == 0 {
-		return errors.New("svcName is required")
-	}
 
 	if !strings.Contains(environs, environ) {
 		return fmt.Errorf("invalid environment: %s; accepted values are `%s`, `%s`, `%s`, `%s`, and  `%s`",
@@ -172,7 +181,7 @@ func CommitHash() string {
 
 // BuildDate returns the date of the build. It is set by the build process.
 func BuildDate() string {
-	return buildDate
+	return bDate
 }
 
 // Version returns the version of the build. It is set by the build process.
@@ -188,7 +197,7 @@ func Environment() string {
 
 // ServiceName returns the name of the svcName.
 func ServiceName() string {
-	return svcName
+	return name
 }
 
 // LogLevel returns the log level. It is set by the environment variable `LOG_LEVEL` and can be overridden by the
@@ -228,6 +237,6 @@ func ShowVersion() {
 	if !*fVer {
 		return
 	}
-	fmt.Printf("Version: %s, Build Date: %s, Build Commit: %s\n", version, buildDate, commitHash)
+	fmt.Printf("Version: %s, Build Date: %s, Build Commit: %s\n", version, bDate, commitHash)
 	os.Exit(0)
 }
