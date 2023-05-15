@@ -35,8 +35,13 @@ func TestInitialize(t *testing.T) {
 
 	_, err = metrics.Initialize("unit-tests", conn)
 	assert.NoError(t, err, "failed to initialize metrics")
-	f := middleware.LogRequest()
-	assert.NotNil(t, f)
+	assert.NoError(t, middleware.InitializeMetrics())
+	l := middleware.LoggingMiddleware()
+
+	assert.NotNil(t, l)
+	m := middleware.MetricsMiddleware()
+	assert.NotNil(t, m)
+	assert.True(t, middleware.MetricsReady())
 }
 
 type testCase struct {
@@ -214,14 +219,8 @@ func TestParseHeaders(t *testing.T) {
 
 	hdrMap := middleware.ParseHeaders(headers)
 
-	keys := make([]string, 0, len(hdrMap))
-	for k := range hdrMap {
-		keys = append(keys, k)
-	}
-
-	for _, k := range keys {
-		k = strings.ToLower(k)
-		assert.Equal(t, expected, hdrMap[k].Value, "ParseHeaders should return the expected map")
+	for _, la := range hdrMap {
+		assert.Equal(t, expected, strings.Join(la.Value.([]string), "; "), "ParseHeaders should return the expected map")
 	}
 }
 
@@ -240,7 +239,7 @@ func TestLogRequestMiddleware(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.Use(middleware.LogRequest())
+	router.Use(middleware.LoggingMiddleware())
 	router.GET("/test", func(c *gin.Context) {
 		c.String(http.StatusOK, "OK")
 	})

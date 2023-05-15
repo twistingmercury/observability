@@ -4,6 +4,7 @@ package tracer
 import (
 	"context"
 	"fmt"
+
 	"github.com/twistingmercury/observability/observeCfg"
 	"go.opentelemetry.io/otel/attribute"
 	otelCodes "go.opentelemetry.io/otel/codes"

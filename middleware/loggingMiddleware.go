@@ -3,58 +3,28 @@ package middleware
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/trace"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mileusna/useragent"
 	"github.com/twistingmercury/observability/logger"
-	"github.com/twistingmercury/observability/metrics"
 	"github.com/twistingmercury/observability/tracer"
-	"go.opentelemetry.io/otel/metric"
 )
 
-var (
-	activeReq metric.Int64UpDownCounter
-	totalReq  metric.Int64Counter
-	avgReqDur metric.Float64Histogram
-)
-
-func initialize() {
-	cr, err := metrics.NewUpDownCounter("http.active_requests", "The current number of active requests being served.")
-	if err != nil {
-		logrus.Panic(fmt.Errorf("failed to create active_requests up down counter: %w", err))
-	}
-
-	tr, err := metrics.NewCounter("http.total_requests_served", "The total number of requests served.")
-	if err != nil {
-		logrus.Panic(fmt.Errorf("failed to create total_requests_served counter: %w", err))
-	}
-
-	ar, err := metrics.NewHistogram("http.request_duration_seconds", "The request duration in seconds.")
-	if err != nil {
-		logrus.Panic(fmt.Errorf("failed to create request_duration_seconds histogram: %w", err))
-	}
-	activeReq = cr
-	totalReq = tr
-	avgReqDur = ar
+// InitializeLogging initializes the logging middleware.  Currently a no-op.
+func InitializeLogging() error {
+	// currently no-op, reserved for later.
+	return nil
 }
 
-// LogRequest logs the incoming request and starts the trace.
-func LogRequest() gin.HandlerFunc {
-	initialize()
+// LoggingMiddleware logs the incoming request and starts the trace.
+func LoggingMiddleware() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		rCtx, span := tracer.New(ctx.Request.Context(), "inbound-request", trace.SpanKindServer)
-		activeReq.Add(rCtx, 1)
-		totalReq.Add(rCtx, 1)
-		s := time.Now()
 
 		defer func() {
 			tracer.EndOK(span)
-			activeReq.Add(rCtx, -1)
-			avgReqDur.Record(rCtx, time.Since(s).Seconds())
 		}()
 
 		ctx.Request = ctx.Request.Clone(rCtx)
@@ -69,33 +39,22 @@ func LogRequest() gin.HandlerFunc {
 			attribs = append(attribs, logger.Attribute{Key: "http.query", Value: rawq})
 		}
 
-		for _, v := range ParseHeaders(ctx.Request.Header) {
-			attribs = append(attribs, v)
-		}
+		hd := ParseHeaders(ctx.Request.Header)
+		attribs = append(attribs, hd...)
 
-		for _, v := range ParseUserAgent(ctx.Request.UserAgent()) {
-			attribs = append(attribs, v)
-		}
+		ua := ParseUserAgent(ctx.Request.UserAgent())
+		attribs = append(attribs, ua...)
 
-		logger.InfoWithSpanContext(ctx.Request.Context(), "inbound-request", attribs...)
+		logger.InfoWithSpanContext(rCtx, "inbound-request", attribs...)
 		ctx.Next()
 	}
 }
 
 // ParseHeaders parses the headers and returns a map of attributes.
-func ParseHeaders(headers map[string][]string) (headerMap map[string]logger.Attribute) {
-	keys := make([]string, 0, len(headers))
-	for k := range headers {
-		keys = append(keys, k)
-	}
-
-	headerMap = make(map[string]logger.Attribute)
-
-	for _, k := range keys {
-		lck := strings.ToLower(k)
-		la := logger.Attribute{Key: fmt.Sprintf("http.header.%s", lck),
-			Value: strings.Join(headers[k], "; ")}
-		headerMap[lck] = la
+func ParseHeaders(headers map[string][]string) (hdrMap []logger.Attribute) {
+	hdrMap = make([]logger.Attribute, 0, len(headers))
+	for k, v := range headers {
+		hdrMap = append(hdrMap, logger.Attribute{Key: strings.ToLower(k), Value: v})
 	}
 	return
 }
@@ -105,7 +64,7 @@ func ParseUserAgent(rawUserAgent string) (uaMap []logger.Attribute) {
 	if len(rawUserAgent) == 0 {
 		return //no-op
 	}
-	uaMap = make([]logger.Attribute, 0)
+
 	ua := useragent.Parse(rawUserAgent)
 	uaMap = []logger.Attribute{
 		{Key: "http.user_agent.os", Value: ua.OS},
@@ -121,8 +80,6 @@ func ParseUserAgent(rawUserAgent string) (uaMap []logger.Attribute) {
 		uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.type", Value: "tablet"})
 	case ua.Desktop:
 		uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.type", Value: "desktop"})
-		//case ua.Bot:
-		//	uaMap = append(uaMap, logger.Attribute{Key: "http.user_agent.type", Value: "bot"})
 	}
 
 	if ua.Mobile || ua.Tablet || ua.Desktop {
