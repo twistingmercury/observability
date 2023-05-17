@@ -16,7 +16,7 @@ import (
 
 func TestTracing(t *testing.T) {
 	logBuf := &bytes.Buffer{}
-	logger.Initialize(logBuf, logrus.DebugLevel, &logrus.JSONFormatter{})
+	logger.Initialize(logBuf, logrus.DebugLevel)
 
 	ctx := context.Background()
 	conn, err := testTools.DialContext(ctx)

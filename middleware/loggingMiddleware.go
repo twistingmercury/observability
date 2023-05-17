@@ -12,12 +12,6 @@ import (
 	"github.com/twistingmercury/observability/tracer"
 )
 
-// InitializeLogging initializes the logging middleware.  Currently a no-op.
-func InitializeLogging() error {
-	// currently no-op, reserved for later.
-	return nil
-}
-
 // LoggingMiddleware logs the incoming request and starts the trace.
 func LoggingMiddleware() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
