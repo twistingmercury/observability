@@ -17,9 +17,10 @@ import (
 )
 
 var (
-	meter     metric.Meter
-	namespace string
-	attribs   = []attribute.KeyValue{
+	isInitialized bool
+	meter         metric.Meter
+	namespace     string
+	attribs       = []attribute.KeyValue{
 		{Key: "service", Value: attribute.StringValue(observeCfg.ServiceName())},
 		{Key: "host", Value: attribute.StringValue(observeCfg.HostName())},
 		{Key: "container_id", Value: attribute.StringValue(observeCfg.HostName())},
@@ -28,6 +29,11 @@ var (
 		{Key: "build_date", Value: attribute.StringValue(observeCfg.BuildDate())},
 		{Key: "commit_hash", Value: attribute.StringValue(observeCfg.CommitHash())}}
 )
+
+// IsInitialized returns true if the metrics have been successfully initialized.
+func IsInitialized() bool {
+	return isInitialized
+}
 
 // Initialize sets up the metrics using the given grpc connection and namespace.
 func Initialize(ns string, conn *grpc.ClientConn) (func(context context.Context) error, error) {
@@ -46,6 +52,7 @@ func Initialize(ns string, conn *grpc.ClientConn) (func(context context.Context)
 	)
 
 	if err != nil {
+		isInitialized = false
 		return nil, err
 	}
 
@@ -69,6 +76,7 @@ func Initialize(ns string, conn *grpc.ClientConn) (func(context context.Context)
 	)
 
 	logger.Info("metrics initialized")
+	isInitialized = true
 	return meterProvider.Shutdown, nil
 }
 

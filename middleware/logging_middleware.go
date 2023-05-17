@@ -3,6 +3,7 @@ package middleware
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/trace"
 	"strings"
 
@@ -14,6 +15,9 @@ import (
 
 // LoggingMiddleware logs the incoming request and starts the trace.
 func LoggingMiddleware() gin.HandlerFunc {
+	if !logger.IsInitialized() {
+		logrus.Fatal("logger.Initialize() must be invoked before using the logging middleware")
+	}
 	return func(ctx *gin.Context) {
 		rCtx, span := tracer.New(ctx.Request.Context(), "inbound-request", trace.SpanKindServer)
 

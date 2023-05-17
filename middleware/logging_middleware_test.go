@@ -7,7 +7,7 @@ import (
 	"github.com/twistingmercury/observability/logger"
 	"github.com/twistingmercury/observability/metrics"
 	"github.com/twistingmercury/observability/testTools"
-	tracing "github.com/twistingmercury/observability/tracer"
+	"github.com/twistingmercury/observability/tracer"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,30 +18,34 @@ import (
 	"github.com/twistingmercury/observability/middleware"
 )
 
+func TestFullMiddlewareChain(t *testing.T) {
+	logrus.StandardLogger().ExitFunc = func(int) {}
+	logger.Initialize(&bytes.Buffer{}, logrus.DebugLevel)
+	assert.True(t, logger.IsInitialized())
+	tCtx := context.Background()
+	tConn, _ := testTools.DialContext(tCtx)
+	ts, _ := tracer.Initialize(tConn)
+	ms, _ := metrics.Initialize("test", tConn)
+	defer func() {
+		_ = ts(tCtx)
+		_ = ms(tCtx)
+	}()
+
+	chain := middleware.FullMiddlewareChain()
+	assert.NotNil(t, chain)
+	assert.Len(t, chain, 3)
+	for _, m := range chain {
+		assert.NotNil(t, m)
+		assert.IsType(t, gin.HandlerFunc(nil), m)
+	}
+}
+
 func TestInitialize(t *testing.T) {
 	logBuf := &bytes.Buffer{}
 	logger.Initialize(logBuf, logrus.DebugLevel)
-
-	ctx := context.TODO()
-	conn, err := testTools.DialContext(ctx)
-	assert.NoError(t, err)
-
-	shutdown, err := metrics.Initialize("unit.test", conn)
-	assert.NoError(t, err)
-	defer func() {
-		testTools.Reset(ctx)
-		_ = shutdown(ctx)
-	}()
-
-	_, err = metrics.Initialize("unit-tests", conn)
-	assert.NoError(t, err, "failed to initialize metrics")
-	assert.NoError(t, middleware.InitializeMetrics())
+	assert.True(t, logger.IsInitialized())
 	l := middleware.LoggingMiddleware()
-
 	assert.NotNil(t, l)
-	m := middleware.MetricsMiddleware()
-	assert.NotNil(t, m)
-	assert.True(t, middleware.MetricsReady())
 }
 
 type testCase struct {
@@ -205,7 +209,6 @@ func TestParseUserAgent(t *testing.T) {
 }
 
 func TestParseHeaders(t *testing.T) {
-
 	testValue := []string{"test0", "test1", "test2"}
 	expected := strings.Join(testValue, "; ")
 	headers := map[string][]string{
@@ -225,18 +228,6 @@ func TestParseHeaders(t *testing.T) {
 }
 
 func TestLogRequestMiddleware(t *testing.T) {
-
-	ctx := context.Background()
-	conn, err := testTools.DialContext(ctx)
-	assert.NoError(t, err)
-
-	_, err = metrics.Initialize("unit-tests", conn)
-	assert.NoError(t, err, "failed to initialize metrics")
-
-	_, err = tracing.Initialize(conn)
-
-	assert.NoError(t, err, "failed to initialize middleware")
-
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(middleware.LoggingMiddleware())

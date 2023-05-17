@@ -16,6 +16,15 @@ type Attribute struct {
 	Value interface{}
 }
 
+var (
+	isInitialized bool
+)
+
+// IsInitialized returns true if the logger has been successfully initialized.
+func IsInitialized() bool {
+	return isInitialized
+}
+
 // Initialize sets up the logger with the given log level and formatter.
 func Initialize(out io.Writer, level logrus.Level, hooks ...logrus.Hook) {
 	logrus.SetFormatter(&logrus.JSONFormatter{})
@@ -24,6 +33,7 @@ func Initialize(out io.Writer, level logrus.Level, hooks ...logrus.Hook) {
 	for _, h := range hooks {
 		logrus.AddHook(h)
 	}
+	isInitialized = true
 }
 
 // ==================== loggers ====================

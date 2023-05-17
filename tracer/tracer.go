@@ -19,10 +19,19 @@ import (
 	"google.golang.org/grpc"
 )
 
-var tracer trace.Tracer
+var (
+	isInitialized bool
+	tracer        trace.Tracer
+)
+
+// IsInitialized returns true if the tracer has been successfully initialized.
+func IsInitialized() bool {
+	return isInitialized
+}
 
 // Initialize initializes the OpenTelemetry tracing library.
 func Initialize(conn *grpc.ClientConn) (func(context.Context) error, error) {
+	isInitialized = false
 	ctx := context.Background()
 
 	res, err := resource.New(ctx,
@@ -54,6 +63,7 @@ func Initialize(conn *grpc.ClientConn) (func(context.Context) error, error) {
 	otel.SetTracerProvider(tracerProvider)
 	tracer = tracerProvider.Tracer(observeCfg.ServiceName())
 
+	isInitialized = true
 	// Shutdown will flush any remaining spans and shut down the exporter.
 	return tracerProvider.Shutdown, nil
 }

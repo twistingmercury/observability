@@ -161,7 +161,7 @@ func TestWithTracing(t *testing.T) {
 func TestInitialize(t *testing.T) {
 	var buf bytes.Buffer
 	logger.Initialize(&buf, logrus.DebugLevel)
-
+	assert.True(t, logger.IsInitialized())
 	assert.Equal(t, logrus.DebugLevel, logrus.GetLevel())
 	assert.IsType(t, &logrus.JSONFormatter{}, logrus.StandardLogger().Formatter)
 	assert.Equal(t, &buf, logrus.StandardLogger().Out)

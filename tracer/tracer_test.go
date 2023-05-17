@@ -24,6 +24,7 @@ func TestTracing(t *testing.T) {
 
 	shutdown, err := tracing.Initialize(conn)
 	assert.NoError(t, err)
+	assert.True(t, tracing.IsInitialized())
 	assert.NotNil(t, shutdown)
 	defer func() {
 		testTools.Reset(ctx)
