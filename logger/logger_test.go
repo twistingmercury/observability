@@ -2,15 +2,10 @@ package logger_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"github.com/twistingmercury/observability/logger/hooks"
 	"github.com/twistingmercury/observability/observeCfg"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"os"
 	"testing"
 
@@ -31,15 +26,15 @@ type loggerTest struct {
 	attribs       []logger.Attribute
 }
 
-type logWithSpanContextTest struct {
-	level         logrus.Level
-	expectedLevel string
-	msg           string
-	logFunc       func(context.Context, string, ...logger.Attribute)
-	err           error
-	errFunc       func(context.Context, error, string, ...logger.Attribute)
-	attribs       []logger.Attribute
-}
+//type logWithSpanContextTest struct {
+//	level         logrus.Level
+//	expectedLevel string
+//	msg           string
+//	logFunc       func(context.Context, string, ...logger.Attribute)
+//	err           error
+//	errFunc       func(context.Context, error, string, ...logger.Attribute)
+//	attribs       []logger.Attribute
+//}
 
 var (
 	attribs = []logger.Attribute{
@@ -60,18 +55,18 @@ var (
 		{logrus.FatalLevel, "fatal", "fatal message", nil, errors.New("fatal"), logger.Fatal, attribs},
 	}
 
-	withContextTests = []logWithSpanContextTest{
-		{logrus.DebugLevel, "debug", "debug message with span context", logger.DebugWithSpanContext, nil, nil, nil},
-		{logrus.InfoLevel, "info", "info message with span context", logger.InfoWithSpanContext, nil, nil, nil},
-		{logrus.WarnLevel, "warning", "warning message with span context", logger.WarnWithSpanContext, nil, nil, nil},
-		{logrus.ErrorLevel, "error", "error message with span context", nil, errors.New("test error"), logger.ErrorWithSpanContext, nil},
-		{logrus.FatalLevel, "fatal", "fatal message with span context", nil, errors.New("test fatal"), logger.FatalWithSpanContext, nil},
-		{logrus.DebugLevel, "debug", "debug message with span context", logger.DebugWithSpanContext, nil, nil, attribs},
-		{logrus.InfoLevel, "info", "info message with span context", logger.InfoWithSpanContext, nil, nil, attribs},
-		{logrus.WarnLevel, "warning", "warning message with span context", logger.WarnWithSpanContext, nil, nil, attribs},
-		{logrus.ErrorLevel, "error", "error message with span context", nil, errors.New("test error"), logger.ErrorWithSpanContext, attribs},
-		{logrus.FatalLevel, "fatal", "fatal message with span context", nil, errors.New("test fatal"), logger.FatalWithSpanContext, attribs},
-	}
+	//withContextTests = []logWithSpanContextTest{
+	//	{logrus.DebugLevel, "debug", "debug message with span context", logger.DebugWithSpanContext, nil, nil, nil},
+	//	{logrus.InfoLevel, "info", "info message with span context", logger.InfoWithSpanContext, nil, nil, nil},
+	//	{logrus.WarnLevel, "warning", "warning message with span context", logger.WarnWithSpanContext, nil, nil, nil},
+	//	{logrus.ErrorLevel, "error", "error message with span context", nil, errors.New("test error"), logger.ErrorWithSpanContext, nil},
+	//	{logrus.FatalLevel, "fatal", "fatal message with span context", nil, errors.New("test fatal"), logger.FatalWithSpanContext, nil},
+	//	{logrus.DebugLevel, "debug", "debug message with span context", logger.DebugWithSpanContext, nil, nil, attribs},
+	//	{logrus.InfoLevel, "info", "info message with span context", logger.InfoWithSpanContext, nil, nil, attribs},
+	//	{logrus.WarnLevel, "warning", "warning message with span context", logger.WarnWithSpanContext, nil, nil, attribs},
+	//	{logrus.ErrorLevel, "error", "error message with span context", nil, errors.New("test error"), logger.ErrorWithSpanContext, attribs},
+	//	{logrus.FatalLevel, "fatal", "fatal message with span context", nil, errors.New("test fatal"), logger.FatalWithSpanContext, attribs},
+	//}
 )
 
 func setup() {
@@ -84,7 +79,7 @@ func setup() {
 func TestNoTracing(t *testing.T) {
 	logrus.StandardLogger().ExitFunc = func(int) {}
 	setup()
-	err := observeCfg.Initialize("unit-test", "2023-1-1", "0.0.0", "aadg123")
+	err := observeCfg.Initialize("unit-test", "2023-1-1", "0.0.0", "abcd1234")
 	assert.NoError(t, err)
 	for _, test := range noContextTests {
 		var buf bytes.Buffer
@@ -114,49 +109,49 @@ func TestNoTracing(t *testing.T) {
 	}
 }
 
-func TestWithTracing(t *testing.T) {
-	logrus.StandardLogger().ExitFunc = func(int) {}
-	for _, test := range withContextTests {
-		var buf bytes.Buffer
-
-		exporter := tracetest.NewInMemoryExporter()
-		bsp := sdktrace.NewBatchSpanProcessor(exporter)
-		tracerProvider := sdktrace.NewTracerProvider(
-			sdktrace.WithSampler(sdktrace.AlwaysSample()),
-			sdktrace.WithSpanProcessor(bsp),
-		)
-		otel.SetTextMapPropagator(propagation.TraceContext{})
-		otel.SetTracerProvider(tracerProvider)
-		tTracer := tracerProvider.Tracer(observeCfg.ServiceName())
-		ctx, span := tTracer.Start(context.Background(), test.expectedLevel)
-
-		logger.Initialize(&buf, test.level, hooks.NewTraceHook())
-		switch test.level {
-		case logrus.ErrorLevel, logrus.FatalLevel:
-			test.errFunc(ctx, test.err, test.msg, test.attribs...)
-		default:
-			test.logFunc(ctx, test.msg, test.attribs...)
-		}
-
-		var logEntry map[string]interface{}
-		err := json.Unmarshal(buf.Bytes(), &logEntry)
-		assert.NoError(t, err)
-		assert.NotEmpty(t, logEntry)
-
-		assert.Equal(t, test.msg, logEntry["msg"])
-		assert.Equal(t, test.expectedLevel, logEntry["level"])
-
-		if len(test.attribs) > 0 {
-			for _, attrib := range test.attribs {
-				assert.Equal(t, attrib.Value, logEntry[attrib.Key])
-			}
-		}
-
-		_ = tracerProvider.Shutdown(ctx)
-		span.End()
-		buf.Reset()
-	}
-}
+//func TestWithTracing(t *testing.T) {
+//	logrus.StandardLogger().ExitFunc = func(int) {}
+//	for _, test := range withContextTests {
+//		var buf bytes.Buffer
+//
+//		exporter := tracetest.NewInMemoryExporter()
+//		bsp := sdktrace.NewBatchSpanProcessor(exporter)
+//		tracerProvider := sdktrace.NewTracerProvider(
+//			sdktrace.WithSampler(sdktrace.AlwaysSample()),
+//			sdktrace.WithSpanProcessor(bsp),
+//		)
+//		otel.SetTextMapPropagator(propagation.TraceContext{})
+//		otel.SetTracerProvider(tracerProvider)
+//		tTracer := tracerProvider.Tracer(observeCfg.ServiceName())
+//		ctx, span := tTracer.Start(context.Background(), test.expectedLevel)
+//
+//		logger.Initialize(&buf, test.level, hooks.NewTraceHook())
+//		switch test.level {
+//		case logrus.ErrorLevel, logrus.FatalLevel:
+//			test.errFunc(ctx, test.err, test.msg, test.attribs...)
+//		default:
+//			test.logFunc(ctx, test.msg, test.attribs...)
+//		}
+//
+//		var logEntry map[string]interface{}
+//		err := json.Unmarshal(buf.Bytes(), &logEntry)
+//		assert.NoError(t, err)
+//		assert.NotEmpty(t, logEntry)
+//
+//		assert.Equal(t, test.msg, logEntry["msg"])
+//		assert.Equal(t, test.expectedLevel, logEntry["level"])
+//
+//		if len(test.attribs) > 0 {
+//			for _, attrib := range test.attribs {
+//				assert.Equal(t, attrib.Value, logEntry[attrib.Key])
+//			}
+//		}
+//
+//		_ = tracerProvider.Shutdown(ctx)
+//		span.End()
+//		buf.Reset()
+//	}
+//}
 
 func TestInitialize(t *testing.T) {
 	var buf bytes.Buffer

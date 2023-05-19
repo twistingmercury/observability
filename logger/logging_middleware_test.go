@@ -1,4 +1,4 @@
-package middleware_test
+package logger_test
 
 import (
 	"bytes"
@@ -22,6 +22,7 @@ func TestFullMiddlewareChain(t *testing.T) {
 	logrus.StandardLogger().ExitFunc = func(int) {}
 	logger.Initialize(&bytes.Buffer{}, logrus.DebugLevel)
 	assert.True(t, logger.IsInitialized())
+
 	tCtx := context.Background()
 	tConn, _ := testTools.DialContext(tCtx)
 	ts, _ := tracer.Initialize(tConn)
@@ -40,11 +41,11 @@ func TestFullMiddlewareChain(t *testing.T) {
 	}
 }
 
-func TestInitialize(t *testing.T) {
+func TestMiddleware_Initialize(t *testing.T) {
 	logBuf := &bytes.Buffer{}
 	logger.Initialize(logBuf, logrus.DebugLevel)
 	assert.True(t, logger.IsInitialized())
-	l := middleware.LoggingMiddleware()
+	l := logger.LoggingMiddleware()
 	assert.NotNil(t, l)
 }
 
@@ -200,11 +201,11 @@ var testCases = []testCase{
 
 func TestParseUserAgent(t *testing.T) {
 	for _, tc := range testCases {
-		uaMap := middleware.ParseUserAgent(tc.rawUserAgent)
+		uaMap := logger.ParseUserAgent(tc.rawUserAgent)
 		assert.ElementsMatch(t, tc.expected, uaMap, "ParseUserAgent should return the expected map")
 	}
 
-	uaMap := middleware.ParseUserAgent(``)
+	uaMap := logger.ParseUserAgent(``)
 	assert.Empty(t, uaMap, "ParseUserAgent should return an empty map")
 }
 
@@ -220,7 +221,7 @@ func TestParseHeaders(t *testing.T) {
 		"Accept":          testValue,
 	}
 
-	hdrMap := middleware.ParseHeaders(headers)
+	hdrMap := logger.ParseHeaders(headers)
 
 	for _, la := range hdrMap {
 		assert.Equal(t, expected, strings.Join(la.Value.([]string), "; "), "ParseHeaders should return the expected map")
@@ -230,7 +231,7 @@ func TestParseHeaders(t *testing.T) {
 func TestLogRequestMiddleware(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.Use(middleware.LoggingMiddleware())
+	router.Use(logger.LoggingMiddleware())
 	router.GET("/test", func(c *gin.Context) {
 		c.String(http.StatusOK, "OK")
 	})

@@ -19,8 +19,12 @@ import (
 var (
 	isInitialized bool
 	meter         metric.Meter
-	namespace     string
-	attribs       = []attribute.KeyValue{
+	reader        sdkMetric.Reader
+	exporter      sdkMetric.Exporter
+	provider      *sdkMetric.MeterProvider
+
+	namespace string
+	attribs   = []attribute.KeyValue{
 		{Key: "service", Value: attribute.StringValue(observeCfg.ServiceName())},
 		{Key: "host", Value: attribute.StringValue(observeCfg.HostName())},
 		{Key: "container_id", Value: attribute.StringValue(observeCfg.HostName())},
@@ -29,6 +33,14 @@ var (
 		{Key: "build_date", Value: attribute.StringValue(observeCfg.BuildDate())},
 		{Key: "commit_hash", Value: attribute.StringValue(observeCfg.CommitHash())}}
 )
+
+func reset() {
+	isInitialized = false
+	_ = exporter.Shutdown(context.Background())
+	exporter = nil
+	_ = reader.Shutdown(context.Background())
+	_ = provider.Shutdown(context.Background())
+}
 
 // IsInitialized returns true if the metrics have been successfully initialized.
 func IsInitialized() bool {
@@ -50,18 +62,18 @@ func Initialize(ns string, conn *grpc.ClientConn) (func(context context.Context)
 		otlpmetricgrpc.WithInsecure(),
 		otlpmetricgrpc.WithGRPCConn(conn),
 	)
-
 	if err != nil {
 		isInitialized = false
 		return nil, err
 	}
+	exporter = exp
 
 	res, err := resource.New(ctx, resource.WithAttributes(attribs...))
 	if err != nil {
 		return nil, err
 	}
 
-	reader := sdkMetric.NewPeriodicReader(exp)
+	reader = sdkMetric.NewPeriodicReader(exporter)
 	option := []sdkMetric.Option{
 		sdkMetric.WithReader(reader),
 		sdkMetric.WithResource(res),

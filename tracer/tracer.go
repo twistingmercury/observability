@@ -4,6 +4,7 @@ package tracer
 import (
 	"context"
 	"fmt"
+	"github.com/twistingmercury/observability/logger"
 
 	"github.com/twistingmercury/observability/observeCfg"
 	"go.opentelemetry.io/otel/attribute"
@@ -20,13 +21,22 @@ import (
 )
 
 var (
-	isInitialized bool
-	tracer        trace.Tracer
+	isInitialized  bool
+	tracerProvider *sdktrace.TracerProvider
+	tracer         trace.Tracer
 )
 
 // IsInitialized returns true if the tracer has been successfully initialized.
 func IsInitialized() bool {
 	return isInitialized
+}
+
+func reset() {
+	_ = tracerProvider.Shutdown(context.Background())
+	tracerProvider = nil
+	tracer = nil
+	isInitialized = false
+	logger.Debug("tracer reset")
 }
 
 // Initialize initializes the OpenTelemetry tracing library.
@@ -53,7 +63,7 @@ func Initialize(conn *grpc.ClientConn) (func(context.Context) error, error) {
 	}
 
 	bsp := sdktrace.NewBatchSpanProcessor(traceExporter)
-	tracerProvider := sdktrace.NewTracerProvider(
+	tracerProvider = sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		sdktrace.WithResource(res),
 		sdktrace.WithSpanProcessor(bsp),
