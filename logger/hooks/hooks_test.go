@@ -38,22 +38,22 @@ func tearDown() {
 	buf.Reset()
 }
 
-type test struct {
-	level   logrus.Level
-	err     error
-	logFunc func(string, ...logger.Attribute)
-	errFunc func(error, string, ...logger.Attribute)
-}
-
-var tests = []test{
-	{logrus.DebugLevel, nil, logger.Debug, nil},
-	{logrus.InfoLevel, nil, logger.Info, nil},
-	{logrus.WarnLevel, nil, logger.Warn, nil},
-	{logrus.ErrorLevel, errors.New("test error"), nil, logger.Error},
-	{logrus.FatalLevel, errors.New("test fatal"), nil, logger.Fatal},
-}
-
 func TestStdFieldsHook_FireHook(t *testing.T) {
+	type test struct {
+		level   logrus.Level
+		err     error
+		logFunc func(string, ...logger.Attribute)
+		errFunc func(error, string, ...logger.Attribute)
+	}
+
+	var tests = []test{
+		{logrus.DebugLevel, nil, logger.Debug, nil},
+		{logrus.InfoLevel, nil, logger.Info, nil},
+		{logrus.WarnLevel, nil, logger.Warn, nil},
+		{logrus.ErrorLevel, errors.New("test error"), nil, logger.Error},
+		{logrus.FatalLevel, errors.New("test fatal"), nil, logger.Fatal},
+	}
+
 	logrus.StandardLogger().ExitFunc = func(int) {}
 	for _, test := range tests {
 		t.Run(test.level.String(), func(t *testing.T) {
@@ -84,6 +84,21 @@ func TestStdFieldsHook_FireHook(t *testing.T) {
 }
 
 func TestTraceHook_Fire(t *testing.T) {
+	type test struct {
+		level   logrus.Level
+		err     error
+		logFunc func(context.Context, string, ...logger.Attribute)
+		errFunc func(context.Context, error, string, ...logger.Attribute)
+	}
+
+	var tests = []test{
+		{logrus.DebugLevel, nil, logger.DebugWithSpanContext, nil},
+		{logrus.InfoLevel, nil, logger.InfoWithSpanContext, nil},
+		{logrus.WarnLevel, nil, logger.WarnWithSpanContext, nil},
+		{logrus.ErrorLevel, errors.New("test error"), nil, logger.ErrorWithSpanContext},
+		{logrus.FatalLevel, errors.New("test fatal"), nil, logger.FatalWithSpanContext},
+	}
+
 	logrus.StandardLogger().ExitFunc = func(int) {}
 	setup(t)
 	defer tearDown()
@@ -107,21 +122,26 @@ func TestTraceHook_Fire(t *testing.T) {
 			assert.NotNil(t, hook)
 			logger.Initialize(&buf, test.level, hook)
 
-			_, span := tracer.New(context.Background(), "test_span", trace.SpanKindUnspecified)
+			ctx, span := tracer.New(context.Background(), "test_span", trace.SpanKindUnspecified)
 			defer span.End()
 
 			if test.err != nil {
-				test.errFunc(test.err, "test message")
+				test.errFunc(ctx, test.err, "test message")
 			} else {
-				test.logFunc("test message")
+				test.logFunc(ctx, "test message")
 			}
 
 			var logEntry map[string]interface{}
 			err := json.Unmarshal(buf.Bytes(), &logEntry)
 			assert.NoError(t, err)
 
-			assert.NotEqual(t, testTools.EmptyTraceId(), logEntry[hooks.TraceID], "trace id should not be empty")
-			assert.NotEqual(t, testTools.EmptySpanId(), logEntry[hooks.SpanID], "span id should not be empty")
+			eTraceId := span.SpanContext().TraceID().String()
+			eSpanId := span.SpanContext().SpanID().String()
+			aTraceId := logEntry[hooks.TraceID].(string)
+			aSpanId := logEntry[hooks.SpanID].(string)
+
+			assert.Equal(t, eTraceId, aTraceId, "trace id should not be empty")
+			assert.Equal(t, eSpanId, aSpanId, "span id should not be empty")
 		})
 	}
 }

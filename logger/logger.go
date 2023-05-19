@@ -4,6 +4,7 @@
 package logger
 
 import (
+	"context"
 	"io"
 
 	"github.com/sirupsen/logrus"
@@ -70,47 +71,47 @@ func Fatal(err error, msg string, attribs ...Attribute) {
 		WithError(err).Fatal(msg)
 }
 
-//// ==================== logs with context ====================
-//
-//// DebugWithSpanContext logs a message at the debug level with a span context
-//// and any additional fields passed in as attributes, as well as the trace_id and span_id.
-//func DebugWithSpanContext(sCtx context.Context, msg string, attribs ...Attribute) {
-//	logrus.WithContext(sCtx).
-//		WithFields(withFields(attribs...)).
-//		Debug(msg)
-//}
-//
-//// InfoWithSpanContext logs a message at the info level with a span context
-//// and any additional fields passed in as attributes, as well as the trace_id and span_id.
-//func InfoWithSpanContext(sCtx context.Context, msg string, attribs ...Attribute) {
-//	logrus.WithContext(sCtx).
-//		WithFields(withFields(attribs...)).
-//		Info(msg)
-//}
-//
-//// WarnWithSpanContext logs a message at the warn level with a span context
-//// and any additional fields passed in as attributes, as well as the trace_id and span_id.
-//func WarnWithSpanContext(sCtx context.Context, msg string, attribs ...Attribute) {
-//	logrus.WithContext(sCtx).
-//		WithFields(withFields(attribs...)).
-//		Warn(msg)
-//}
-//
-//// ErrorWithSpanContext logs a message at the error level with a span context
-//// and any additional fields passed in as attributes, as well as the trace_id and span_id.
-//func ErrorWithSpanContext(sCtx context.Context, err error, msg string, attribs ...Attribute) {
-//	logrus.WithContext(sCtx).
-//		WithFields(withFields(attribs...)).WithError(err).
-//		Error(msg)
-//}
-//
-//// FatalWithSpanContext logs a message at the fatal level with a span context
-//// and any additional fields passed in as attributes, as well as the trace_id and span_id.
-//func FatalWithSpanContext(sCtx context.Context, err error, msg string, attribs ...Attribute) {
-//	logrus.WithContext(sCtx).
-//		WithFields(withFields(attribs...)).WithError(err).
-//		Fatal(msg)
-//}
+// ==================== logs with context ====================
+
+// DebugWithSpanContext logs a message at the debug level with a span context
+// and any additional fields passed in as attributes, as well as the trace_id and span_id.
+func DebugWithSpanContext(sCtx context.Context, msg string, attribs ...Attribute) {
+	logrus.WithContext(sCtx).
+		WithFields(withFields(attribs...)).
+		Debug(msg)
+}
+
+// InfoWithSpanContext logs a message at the info level with a span context
+// and any additional fields passed in as attributes, as well as the trace_id and span_id.
+func InfoWithSpanContext(sCtx context.Context, msg string, attribs ...Attribute) {
+	logrus.WithContext(sCtx).
+		WithFields(withFields(attribs...)).
+		Info(msg)
+}
+
+// WarnWithSpanContext logs a message at the warn level with a span context
+// and any additional fields passed in as attributes, as well as the trace_id and span_id.
+func WarnWithSpanContext(sCtx context.Context, msg string, attribs ...Attribute) {
+	logrus.WithContext(sCtx).
+		WithFields(withFields(attribs...)).
+		Warn(msg)
+}
+
+// ErrorWithSpanContext logs a message at the error level with a span context
+// and any additional fields passed in as attributes, as well as the trace_id and span_id.
+func ErrorWithSpanContext(sCtx context.Context, err error, msg string, attribs ...Attribute) {
+	logrus.WithContext(sCtx).
+		WithFields(withFields(attribs...)).WithError(err).
+		Error(msg)
+}
+
+// FatalWithSpanContext logs a message at the fatal level with a span context
+// and any additional fields passed in as attributes, as well as the trace_id and span_id.
+func FatalWithSpanContext(sCtx context.Context, err error, msg string, attribs ...Attribute) {
+	logrus.WithContext(sCtx).
+		WithFields(withFields(attribs...)).WithError(err).
+		Fatal(msg)
+}
 
 // withFields adds standard fields to the logs fields.
 func withFields(attribs ...Attribute) logrus.Fields {
