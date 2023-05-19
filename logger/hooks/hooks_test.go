@@ -145,3 +145,66 @@ func TestTraceHook_Fire(t *testing.T) {
 		})
 	}
 }
+
+func TestTraceHook_Fire_Nil_Empty_Context(t *testing.T) {
+	type test struct {
+		level   logrus.Level
+		err     error
+		logFunc func(context.Context, string, ...logger.Attribute)
+		errFunc func(context.Context, error, string, ...logger.Attribute)
+	}
+
+	var tests = []test{
+		{logrus.DebugLevel, nil, logger.DebugWithSpanContext, nil},
+		{logrus.InfoLevel, nil, logger.InfoWithSpanContext, nil},
+		{logrus.WarnLevel, nil, logger.WarnWithSpanContext, nil},
+		{logrus.ErrorLevel, errors.New("test error"), nil, logger.ErrorWithSpanContext},
+		{logrus.FatalLevel, errors.New("test fatal"), nil, logger.FatalWithSpanContext},
+	}
+	logrus.StandardLogger().ExitFunc = func(int) {}
+	for _, test := range tests {
+		t.Run("nil_context_"+test.level.String(), func(t *testing.T) {
+			setup(t)
+			defer tearDown()
+			hook := hooks.NewTraceHook()
+			assert.NotNil(t, hook)
+			logger.Initialize(&buf, test.level, hook)
+
+			if test.err != nil {
+				test.errFunc(nil, test.err, "test message")
+			} else {
+				test.logFunc(nil, "test message")
+			}
+
+			var logEntry map[string]interface{}
+			err := json.Unmarshal(buf.Bytes(), &logEntry)
+			assert.NoError(t, err)
+
+			assert.Nil(t, logEntry[hooks.TraceID], "trace id should be nil")
+			assert.Nil(t, logEntry[hooks.SpanID], "span id should be nil")
+		})
+	}
+
+	for _, test := range tests {
+		t.Run("default_context_"+test.level.String(), func(t *testing.T) {
+			setup(t)
+			defer tearDown()
+			hook := hooks.NewTraceHook()
+			assert.NotNil(t, hook)
+			logger.Initialize(&buf, test.level, hook)
+
+			if test.err != nil {
+				test.errFunc(context.Background(), test.err, "test message")
+			} else {
+				test.logFunc(context.Background(), "test message")
+			}
+
+			var logEntry map[string]interface{}
+			err := json.Unmarshal(buf.Bytes(), &logEntry)
+			assert.NoError(t, err)
+
+			assert.Nil(t, logEntry[hooks.TraceID], "trace id should be nil")
+			assert.Nil(t, logEntry[hooks.SpanID], "span id should be nil")
+		})
+	}
+}
