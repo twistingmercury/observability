@@ -15,10 +15,14 @@ import (
 func TestTracingMiddleware_Initialize(t *testing.T) {
 	tracer.Reset()
 	var fatal = false
+	orgExitFunc := logrus.StandardLogger().ExitFunc
 	logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
 	_ = tracer.TracingMiddleware()
 	assert.True(t, fatal)
 	fatal = false
+	defer func() {
+		logrus.StandardLogger().ExitFunc = orgExitFunc
+	}()
 
 	conn, err := testTools.DialContext(context.Background())
 	assert.NoError(t, err)
@@ -40,5 +44,4 @@ func TestTracingMiddleware_Initialize(t *testing.T) {
 	e.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
-
 }
