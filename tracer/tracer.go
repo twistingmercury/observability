@@ -32,6 +32,9 @@ func IsInitialized() bool {
 }
 
 func reset() {
+	if tracerProvider == nil {
+		return
+	}
 	_ = tracerProvider.Shutdown(context.Background())
 	tracerProvider = nil
 	tracer = nil
