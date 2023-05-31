@@ -4,6 +4,8 @@ package tracer
 import (
 	"context"
 	"fmt"
+	"github.com/twistingmercury/observability/logger"
+
 	"github.com/twistingmercury/observability/observeCfg"
 	"go.opentelemetry.io/otel/attribute"
 	otelCodes "go.opentelemetry.io/otel/codes"
@@ -18,10 +20,31 @@ import (
 	"google.golang.org/grpc"
 )
 
-var tracer trace.Tracer
+var (
+	isInitialized  bool
+	tracerProvider *sdktrace.TracerProvider
+	tracer         trace.Tracer
+)
+
+// IsInitialized returns true if the tracer has been successfully initialized.
+func IsInitialized() bool {
+	return isInitialized
+}
+
+func reset() {
+	if tracerProvider == nil {
+		return
+	}
+	_ = tracerProvider.Shutdown(context.Background())
+	tracerProvider = nil
+	tracer = nil
+	isInitialized = false
+	logger.Debug("tracer reset")
+}
 
 // Initialize initializes the OpenTelemetry tracing library.
 func Initialize(conn *grpc.ClientConn) (func(context.Context) error, error) {
+	isInitialized = false
 	ctx := context.Background()
 
 	res, err := resource.New(ctx,
@@ -43,7 +66,7 @@ func Initialize(conn *grpc.ClientConn) (func(context.Context) error, error) {
 	}
 
 	bsp := sdktrace.NewBatchSpanProcessor(traceExporter)
-	tracerProvider := sdktrace.NewTracerProvider(
+	tracerProvider = sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		sdktrace.WithResource(res),
 		sdktrace.WithSpanProcessor(bsp),
@@ -53,6 +76,7 @@ func Initialize(conn *grpc.ClientConn) (func(context.Context) error, error) {
 	otel.SetTracerProvider(tracerProvider)
 	tracer = tracerProvider.Tracer(observeCfg.ServiceName())
 
+	isInitialized = true
 	// Shutdown will flush any remaining spans and shut down the exporter.
 	return tracerProvider.Shutdown, nil
 }

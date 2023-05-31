@@ -93,29 +93,18 @@ func Initialize(svcName, buildDate, ver, commit string) (err error) {
 	version = ver
 	name = svcName
 
-	if err = bindFlags(); err != nil {
-		return
-	}
+	bindFlags()
 	viper.AutomaticEnv()
 	parseConfig()
 	return validateConfig()
 }
 
-func bindFlags() (err error) {
+func bindFlags() {
 	pflag.Parse()
-	if err = viper.BindPFlag(EnvironEnvVar, pflag.Lookup(environFlag)); err != nil {
-		return
-	}
-	if err = viper.BindPFlag(LogLevelEnvVar, pflag.Lookup(logLevelFlag)); err != nil {
-		return
-	}
-	if err = viper.BindPFlag(TraceEndpointEnvVar, pflag.Lookup(traceEndpointFlag)); err != nil {
-		return
-	}
-	if err = viper.BindPFlag(MetricsEndpointEnvVar, pflag.Lookup(metricsEndpointFlag)); err != nil {
-		return
-	}
-	return
+	_ = viper.BindPFlag(EnvironEnvVar, pflag.Lookup(environFlag))
+	_ = viper.BindPFlag(LogLevelEnvVar, pflag.Lookup(logLevelFlag))
+	_ = viper.BindPFlag(TraceEndpointEnvVar, pflag.Lookup(traceEndpointFlag))
+	_ = viper.BindPFlag(MetricsEndpointEnvVar, pflag.Lookup(metricsEndpointFlag))
 }
 
 func parseConfig() {
@@ -224,19 +213,11 @@ func HostName() string {
 }
 
 // ShowHelp displays the help information and exits if the `--help` flag is set.
-func ShowHelp() {
-	if !*help {
-		return
-	}
-	pflag.Usage()
-	os.Exit(0)
+func ShowHelp() bool {
+	return *help
 }
 
 // ShowVersion displays the version information and exits if the `--version` flag is set.
-func ShowVersion() {
-	if !*fVer {
-		return
-	}
-	fmt.Printf("Version: %s, Build Date: %s, Build Commit: %s\n", version, bDate, commitHash)
-	os.Exit(0)
+func ShowVersion() bool {
+	return *fVer
 }

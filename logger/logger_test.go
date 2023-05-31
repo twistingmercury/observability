@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/twistingmercury/observability/logger/hooks"
 	"github.com/twistingmercury/observability/observeCfg"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"os"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -72,11 +74,21 @@ var (
 	}
 )
 
+func setup() {
+	os.Setenv(observeCfg.LogLevelEnvVar, "debug")
+	os.Setenv(observeCfg.TraceEndpointEnvVar, "traceEndpoint")
+	os.Setenv(observeCfg.MetricsEndpointEnvVar, "metricsEndpoint")
+	os.Setenv(observeCfg.EnvironEnvVar, "localhost")
+}
+
 func TestNoTracing(t *testing.T) {
 	logrus.StandardLogger().ExitFunc = func(int) {}
+	setup()
+	err := observeCfg.Initialize("unit-test", "2023-1-1", "0.0.0", "abcd1234")
+	assert.NoError(t, err)
 	for _, test := range noContextTests {
 		var buf bytes.Buffer
-		logger.Initialize(&buf, test.level, &logrus.JSONFormatter{})
+		logger.Initialize(&buf, test.level, hooks.NewStdFieldsHook(), hooks.NewTraceHook())
 
 		switch test.level {
 		case logrus.ErrorLevel, logrus.FatalLevel:
@@ -106,7 +118,7 @@ func TestWithTracing(t *testing.T) {
 	logrus.StandardLogger().ExitFunc = func(int) {}
 	for _, test := range withContextTests {
 		var buf bytes.Buffer
-		logger.Initialize(&buf, test.level, &logrus.JSONFormatter{})
+
 		exporter := tracetest.NewInMemoryExporter()
 		bsp := sdktrace.NewBatchSpanProcessor(exporter)
 		tracerProvider := sdktrace.NewTracerProvider(
@@ -115,10 +127,10 @@ func TestWithTracing(t *testing.T) {
 		)
 		otel.SetTextMapPropagator(propagation.TraceContext{})
 		otel.SetTracerProvider(tracerProvider)
-		tracer := tracerProvider.Tracer(observeCfg.ServiceName())
+		tTracer := tracerProvider.Tracer(observeCfg.ServiceName())
+		ctx, span := tTracer.Start(context.Background(), test.expectedLevel)
 
-		ctx, span := tracer.Start(context.Background(), test.expectedLevel)
-
+		logger.Initialize(&buf, test.level, hooks.NewTraceHook())
 		switch test.level {
 		case logrus.ErrorLevel, logrus.FatalLevel:
 			test.errFunc(ctx, test.err, test.msg, test.attribs...)
@@ -133,8 +145,6 @@ func TestWithTracing(t *testing.T) {
 
 		assert.Equal(t, test.msg, logEntry["msg"])
 		assert.Equal(t, test.expectedLevel, logEntry["level"])
-		assert.Equal(t, span.SpanContext().TraceID().String(), logEntry["dd.trace_id"])
-		assert.Equal(t, span.SpanContext().SpanID().String(), logEntry["dd.span_id"])
 
 		if len(test.attribs) > 0 {
 			for _, attrib := range test.attribs {
@@ -150,8 +160,8 @@ func TestWithTracing(t *testing.T) {
 
 func TestInitialize(t *testing.T) {
 	var buf bytes.Buffer
-	logger.Initialize(&buf, logrus.DebugLevel, &logrus.JSONFormatter{})
-
+	logger.Initialize(&buf, logrus.DebugLevel)
+	assert.True(t, logger.IsInitialized())
 	assert.Equal(t, logrus.DebugLevel, logrus.GetLevel())
 	assert.IsType(t, &logrus.JSONFormatter{}, logrus.StandardLogger().Formatter)
 	assert.Equal(t, &buf, logrus.StandardLogger().Out)

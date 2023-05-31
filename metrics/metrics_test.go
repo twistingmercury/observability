@@ -13,7 +13,7 @@ import (
 
 func TestMetrics(t *testing.T) {
 	logBuf := &bytes.Buffer{}
-	logger.Initialize(logBuf, logrus.DebugLevel, &logrus.TextFormatter{})
+	logger.Initialize(logBuf, logrus.DebugLevel)
 
 	t.Run("NewUpDownCounter_panics", func(t *testing.T) {
 		assert.Panics(t, func() {
@@ -61,7 +61,7 @@ func TestMetrics(t *testing.T) {
 
 func TestErrors(t *testing.T) {
 	logBuf := &bytes.Buffer{}
-	logger.Initialize(logBuf, logrus.DebugLevel, &logrus.JSONFormatter{})
+	logger.Initialize(logBuf, logrus.DebugLevel)
 
 	_, err := metrics.Initialize("unit.test", nil)
 	assert.Error(t, err)

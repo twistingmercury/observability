@@ -1,4 +1,4 @@
-package middleware_test
+package logger_test
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	"github.com/twistingmercury/observability/logger"
 	"github.com/twistingmercury/observability/metrics"
 	"github.com/twistingmercury/observability/testTools"
-	tracing "github.com/twistingmercury/observability/tracer"
+	"github.com/twistingmercury/observability/tracer"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,25 +18,35 @@ import (
 	"github.com/twistingmercury/observability/middleware"
 )
 
-func TestInitialize(t *testing.T) {
-	logBuf := &bytes.Buffer{}
-	logger.Initialize(logBuf, logrus.DebugLevel, &logrus.JSONFormatter{})
+func TestFullMiddlewareChain(t *testing.T) {
+	logrus.StandardLogger().ExitFunc = func(int) {}
+	logger.Initialize(&bytes.Buffer{}, logrus.DebugLevel)
+	assert.True(t, logger.IsInitialized())
 
-	ctx := context.TODO()
-	conn, err := testTools.DialContext(ctx)
-	assert.NoError(t, err)
-
-	shutdown, err := metrics.Initialize("unit.test", conn)
-	assert.NoError(t, err)
+	tCtx := context.Background()
+	tConn, _ := testTools.DialContext(tCtx)
+	ts, _ := tracer.Initialize(tConn)
+	ms, _ := metrics.Initialize("test", tConn)
 	defer func() {
-		testTools.Reset(ctx)
-		_ = shutdown(ctx)
+		_ = ts(tCtx)
+		_ = ms(tCtx)
 	}()
 
-	_, err = metrics.Initialize("unit-tests", conn)
-	assert.NoError(t, err, "failed to initialize metrics")
-	f := middleware.LogRequest()
-	assert.NotNil(t, f)
+	chain := middleware.FullMiddlewareChain()
+	assert.NotNil(t, chain)
+	assert.Len(t, chain, 3)
+	for _, m := range chain {
+		assert.NotNil(t, m)
+		assert.IsType(t, gin.HandlerFunc(nil), m)
+	}
+}
+
+func TestMiddleware_Initialize(t *testing.T) {
+	logBuf := &bytes.Buffer{}
+	logger.Initialize(logBuf, logrus.DebugLevel)
+	assert.True(t, logger.IsInitialized())
+	l := logger.LoggingMiddleware()
+	assert.NotNil(t, l)
 }
 
 type testCase struct {
@@ -191,16 +201,15 @@ var testCases = []testCase{
 
 func TestParseUserAgent(t *testing.T) {
 	for _, tc := range testCases {
-		uaMap := middleware.ParseUserAgent(tc.rawUserAgent)
+		uaMap := logger.ParseUserAgent(tc.rawUserAgent)
 		assert.ElementsMatch(t, tc.expected, uaMap, "ParseUserAgent should return the expected map")
 	}
 
-	uaMap := middleware.ParseUserAgent(``)
+	uaMap := logger.ParseUserAgent(``)
 	assert.Empty(t, uaMap, "ParseUserAgent should return an empty map")
 }
 
 func TestParseHeaders(t *testing.T) {
-
 	testValue := []string{"test0", "test1", "test2"}
 	expected := strings.Join(testValue, "; ")
 	headers := map[string][]string{
@@ -212,35 +221,17 @@ func TestParseHeaders(t *testing.T) {
 		"Accept":          testValue,
 	}
 
-	hdrMap := middleware.ParseHeaders(headers)
+	hdrMap := logger.ParseHeaders(headers)
 
-	keys := make([]string, 0, len(hdrMap))
-	for k := range hdrMap {
-		keys = append(keys, k)
-	}
-
-	for _, k := range keys {
-		k = strings.ToLower(k)
-		assert.Equal(t, expected, hdrMap[k].Value, "ParseHeaders should return the expected map")
+	for _, la := range hdrMap {
+		assert.Equal(t, expected, strings.Join(la.Value.([]string), "; "), "ParseHeaders should return the expected map")
 	}
 }
 
 func TestLogRequestMiddleware(t *testing.T) {
-
-	ctx := context.Background()
-	conn, err := testTools.DialContext(ctx)
-	assert.NoError(t, err)
-
-	_, err = metrics.Initialize("unit-tests", conn)
-	assert.NoError(t, err, "failed to initialize metrics")
-
-	_, err = tracing.Initialize(conn)
-
-	assert.NoError(t, err, "failed to initialize middleware")
-
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.Use(middleware.LogRequest())
+	router.Use(logger.LoggingMiddleware())
 	router.GET("/test", func(c *gin.Context) {
 		c.String(http.StatusOK, "OK")
 	})

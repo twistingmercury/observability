@@ -135,7 +135,7 @@ func main(){
 ## Logger
 
 The logger is a simple wrapper around [github.com/sirupsen/logrus](https://pkg.go.dev/github.com/sirupsen/logrus). It is meant
-to ensure consistency in how logs are generated and formatted. It should be initialized right after the observeCfg:
+to ensure consistency in how logs are generated and formatted. It should be metricsReady right after the observeCfg:
 
 ```go
 func main(){
