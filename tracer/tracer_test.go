@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/twistingmercury/observability/logger"
 	"github.com/twistingmercury/observability/testTools"
-	tracing "github.com/twistingmercury/observability/tracer"
+	"github.com/twistingmercury/observability/tracer"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"testing"
@@ -16,14 +16,15 @@ import (
 
 func TestTracing(t *testing.T) {
 	logBuf := &bytes.Buffer{}
-	logger.Initialize(logBuf, logrus.DebugLevel, &logrus.JSONFormatter{})
+	logger.Initialize(logBuf, logrus.DebugLevel)
 
 	ctx := context.Background()
 	conn, err := testTools.DialContext(ctx)
 	assert.NoError(t, err)
 
-	shutdown, err := tracing.Initialize(conn)
+	shutdown, err := tracer.Initialize(conn)
 	assert.NoError(t, err)
+	assert.True(t, tracer.IsInitialized())
 	assert.NotNil(t, shutdown)
 	defer func() {
 		testTools.Reset(ctx)
@@ -35,19 +36,19 @@ func TestTracing(t *testing.T) {
 		attribute.Int("test_int", 1),
 	}
 
-	cCtx, span := tracing.New(ctx, "test_span", trace.SpanKindUnspecified, attribs...)
-	defer tracing.EndOK(span)
+	cCtx, span := tracer.New(ctx, "test_span", trace.SpanKindUnspecified, attribs...)
+	defer tracer.EndOK(span)
 	assert.NotNil(t, cCtx)
 	assert.NotNil(t, span)
 	assert.NotEqual(t, testTools.EmptyTraceId(), span.SpanContext().TraceID().String())
 	assert.NotEqual(t, testTools.EmptySpanId(), span.SpanContext().SpanID().String())
-	defer tracing.EndOK(span)
+	defer tracer.EndOK(span)
 
-	dCtx, span := tracing.New(nil, "test_span", trace.SpanKindUnspecified)
-	defer tracing.EndOK(span)
+	dCtx, span := tracer.New(nil, "test_span", trace.SpanKindUnspecified)
+	defer tracer.EndOK(span)
 	assert.NotNil(t, dCtx)
 	assert.NotNil(t, span)
 	assert.NotEqual(t, testTools.EmptyTraceId(), span.SpanContext().TraceID().String())
 	assert.NotEqual(t, testTools.EmptySpanId(), span.SpanContext().SpanID().String())
-	defer tracing.EndError(span, errors.New("test error"))
+	defer tracer.EndError(span, errors.New("test error"))
 }

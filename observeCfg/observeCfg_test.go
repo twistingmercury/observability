@@ -55,6 +55,8 @@ func TestObserveCfg(t *testing.T) {
 		assert.Equal(t, traceEndpoint, observeCfg.TraceEndpoint())
 		assert.Equal(t, metricsEndpoint, observeCfg.MetricsEndpoint())
 		assert.Equal(t, hostName, observeCfg.HostName())
+		assert.False(t, observeCfg.ShowHelp())
+		assert.False(t, observeCfg.ShowVersion())
 	})
 	t.Run("1-invalid_log_level", func(t *testing.T) {
 		setup()
@@ -112,5 +114,30 @@ func TestObserveCfg(t *testing.T) {
 		assert.Equal(t, "localhost:1234", observeCfg.TraceEndpoint())
 		assert.Equal(t, "localhost:5678", observeCfg.MetricsEndpoint())
 		assert.Equal(t, "stage", observeCfg.Environment())
+	})
+	t.Run("9-missing-build_date", func(t *testing.T) {
+		setup()
+		defer tearDown()
+		assert.Error(t, observeCfg.Initialize(svcName, "", version, commitHash))
+	})
+	t.Run("10-missing-version", func(t *testing.T) {
+		setup()
+		defer tearDown()
+		assert.Error(t, observeCfg.Initialize(svcName, buildDate, "", commitHash))
+	})
+	t.Run("11-missing-commit_hash", func(t *testing.T) {
+		setup()
+		defer tearDown()
+		assert.Error(t, observeCfg.Initialize(svcName, buildDate, version, ""))
+	})
+	t.Run("12-show-help", func(t *testing.T) {
+		setup()
+
+		defer tearDown()
+		os.Args = []string{"cmd", "--help", "--version"}
+		assert.NoError(t, observeCfg.Initialize(svcName, buildDate, version, commitHash))
+
+		assert.True(t, observeCfg.ShowHelp())
+		assert.True(t, observeCfg.ShowVersion())
 	})
 }
